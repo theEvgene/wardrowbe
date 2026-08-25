@@ -351,6 +351,10 @@ class ImageService:
             transparent_full = self.storage_path / transparent_path
             result.convert("RGBA").save(transparent_full, format="PNG", optimize=True)
             processing_metadata["transparent_path"] = transparent_path
+        else:
+            previous_cutout = self.storage_path / f"{base_path}_cutout.png"
+            if previous_cutout.exists():
+                previous_cutout.unlink()
 
         # Composite onto solid color background
         background = Image.new("RGBA", result.size, (*bg_color, 255))

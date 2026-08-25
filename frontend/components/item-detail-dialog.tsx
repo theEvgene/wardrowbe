@@ -229,6 +229,8 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
         );
       } else if (result.background_removal.outcome === 'unsupported') {
         toast.warning(t('actions.garmentExtractionUnsupported'));
+      } else if (result.background_removal.outcome === 'failed') {
+        toast.error(t('actions.backgroundRemoveError'));
       } else {
         toast.warning(t('actions.garmentExtractionLowQuality'));
       }

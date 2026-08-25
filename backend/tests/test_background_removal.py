@@ -118,6 +118,8 @@ def test_provider_failure_does_not_change_image(tmp_path: Path) -> None:
 def test_scene_removal_preserves_existing_provider_contract(tmp_path: Path) -> None:
     image_path = tmp_path / "item.jpg"
     _make_rgb_image().save(image_path, format="JPEG")
+    cutout_path = tmp_path / "item_cutout.png"
+    _make_garment_cutout().save(cutout_path, format="PNG")
     svc = ImageService(storage_path=str(tmp_path))
     provider = MagicMock(spec=BackgroundRemovalProvider)
     provider.remove.side_effect = lambda image: _make_rgba_image(*image.size)
@@ -128,6 +130,7 @@ def test_scene_removal_preserves_existing_provider_contract(tmp_path: Path) -> N
     assert result["outcome"] == "accepted"
     assert result["original_backup_path"] == "item_orig.jpg"
     assert (tmp_path / "item_orig.jpg").exists()
+    assert not cutout_path.exists()
 
 
 def test_garment_removal_preserves_transparent_cutout(tmp_path: Path) -> None:
