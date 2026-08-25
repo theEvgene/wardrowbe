@@ -50,12 +50,38 @@ router = APIRouter(prefix="/items", tags=["Items"])
 
 TAG_WRITEBACK_FIELDS = {"type", "subtype", "colors", "primary_color", "tags"}
 _EMPTY_TAG_VALUES = (None, "", [], {})
+_BACKGROUND_REMOVAL_METADATA_KEYS = {
+    "outcome",
+    "mode",
+    "provider",
+    "provider_version",
+    "model",
+    "garment_category",
+    "transparent_path",
+    "warning",
+    "metrics",
+}
 
 
 def _has_tag_content(field: str, value: Any) -> bool:
     if field == "tags" and isinstance(value, dict):
         return any(v not in _EMPTY_TAG_VALUES for v in value.values())
     return value not in _EMPTY_TAG_VALUES
+
+
+def _background_removal_metadata(result: dict[str, object]) -> dict[str, object]:
+    """Project an image-service result onto metadata safe to persist and expose."""
+
+    return {key: value for key, value in result.items() if key in _BACKGROUND_REMOVAL_METADATA_KEYS}
+
+
+def _should_replace_background_state(
+    current: dict[str, object] | None,
+    attempt: dict[str, object],
+) -> bool:
+    """Keep an active successful artifact when a later attempt is rejected."""
+
+    return attempt["outcome"] == "accepted" or (current or {}).get("outcome") != "accepted"
 
 
 @router.get("", response_model=ItemListResponse)
@@ -475,6 +501,7 @@ async def bulk_delete_items(
                     "medium_path": item.medium_path,
                     "thumbnail_path": item.thumbnail_path,
                     "original_backup_path": item.original_image_path,
+                    "transparent_path": (item.background_removal or {}).get("transparent_path"),
                 }
             )
 
@@ -777,6 +804,7 @@ async def delete_item(
             "medium_path": item.medium_path,
             "thumbnail_path": item.thumbnail_path,
             "original_backup_path": item.original_image_path,
+            "transparent_path": (item.background_removal or {}).get("transparent_path"),
         }
     )
 
@@ -1255,10 +1283,16 @@ async def remove_item_background(
             request.mode,
             item.type,
         )
+        metadata = _background_removal_metadata(result)
+        if _should_replace_background_state(item.background_removal, metadata):
+            item.background_removal = metadata
         if result["outcome"] == "accepted":
             item.original_image_path = str(result["original_backup_path"])
-            await db.commit()
-            await db.refresh(item, attribute_names=["original_image_path", "updated_at"])
+        await db.commit()
+        await db.refresh(
+            item,
+            attribute_names=["original_image_path", "background_removal", "updated_at"],
+        )
 
         logger.info(
             "Background removal outcome=%s mode=%s provider=%s version=%s "
@@ -1272,7 +1306,7 @@ async def remove_item_background(
             result.get("metrics", {}),
         )
         response_data = ItemResponse.model_validate(item).model_dump()
-        response_data["background_removal"] = result
+        response_data["background_removal"] = metadata
         return RemoveBackgroundResponse.model_validate(response_data)
     except ImportError:
         raise HTTPException(
@@ -1333,8 +1367,12 @@ async def restore_item_original(
         ) from None
 
     item.original_image_path = None
+    item.background_removal = None
     await db.commit()
-    await db.refresh(item, attribute_names=["original_image_path", "updated_at"])
+    await db.refresh(
+        item,
+        attribute_names=["original_image_path", "background_removal", "updated_at"],
+    )
     return ItemResponse.model_validate(item)
 
 
@@ -1381,6 +1419,7 @@ async def replace_item_image(
         "medium_path": item.medium_path,
         "thumbnail_path": item.thumbnail_path,
         "original_backup_path": item.original_image_path,
+        "transparent_path": (item.background_removal or {}).get("transparent_path"),
     }
 
     item.image_path = image_paths["image_path"]
@@ -1388,6 +1427,7 @@ async def replace_item_image(
     item.thumbnail_path = image_paths["thumbnail_path"]
     item.image_hash = image_paths["image_hash"]
     item.original_image_path = None
+    item.background_removal = None
     await db.commit()
     await db.refresh(
         item,
@@ -1397,6 +1437,7 @@ async def replace_item_image(
             "thumbnail_path",
             "image_hash",
             "original_image_path",
+            "background_removal",
             "updated_at",
         ],
     )

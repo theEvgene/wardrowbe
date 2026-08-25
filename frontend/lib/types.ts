@@ -62,15 +62,17 @@ export interface Item {
   archive_reason?: string;
   created_at: string;
   updated_at: string;
+  background_removal?: BackgroundRemovalMetadata | null;
 }
 
 export interface BackgroundRemovalMetadata {
-  outcome: 'accepted' | 'low_quality' | 'unsupported';
+  outcome: 'accepted' | 'low_quality' | 'unsupported' | 'failed';
   mode: 'scene' | 'garment';
   provider?: string | null;
   provider_version?: string | null;
   model?: string | null;
   garment_category?: 'upper' | 'lower' | 'full' | null;
+  transparent_path?: string | null;
   warning?: string | null;
   metrics: Record<string, number>;
 }

@@ -7,7 +7,9 @@ from io import BytesIO
 from typing import Literal
 
 import httpx
+import numpy as np
 from PIL import Image
+from scipy import ndimage
 
 from app.config import get_settings
 from app.utils.clothing import ITEM_ROLE
@@ -16,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 BackgroundRemovalMode = Literal["scene", "garment"]
 GarmentCategory = Literal["upper", "lower", "full"]
+MIN_GARMENT_MASK_AREA_RATIO = 0.01
+MAX_GARMENT_MASK_AREA_RATIO = 0.95
+MIN_LARGEST_COMPONENT_RATIO = 0.85
 
 _GARMENT_CATEGORY_BY_ROLE: dict[str, GarmentCategory] = {
     "base_top": "upper",
@@ -44,7 +49,7 @@ def garment_category_for_item_type(item_type: str) -> GarmentCategory | None:
 class BackgroundRemovalResult:
     """Structured result returned by garment-aware background removal."""
 
-    outcome: Literal["accepted", "low_quality", "unsupported"]
+    outcome: Literal["accepted", "low_quality", "unsupported", "failed"]
     mode: BackgroundRemovalMode
     image: Image.Image | None = None
     provider: str | None = None
@@ -72,19 +77,81 @@ class RembgProvider(BackgroundRemovalProvider):
         self._session = None
         self._cloth_session = None
 
-    def _get_session(self):
+    def _get_session(self) -> object:
         if self._session is None:
             from rembg import new_session
 
             self._session = new_session(self.model)
         return self._session
 
-    def _get_cloth_session(self):
+    def _get_cloth_session(self) -> object:
         if self._cloth_session is None:
             from rembg import new_session
 
             self._cloth_session = new_session("u2net_cloth_seg")
         return self._cloth_session
+
+    @staticmethod
+    def _mask_area_ratio(result: Image.Image) -> float:
+        alpha_histogram = result.getchannel("A").histogram()
+        pixel_count = result.width * result.height
+        return (pixel_count - alpha_histogram[0]) / pixel_count
+
+    @staticmethod
+    def _largest_component_ratio(result: Image.Image) -> float:
+        mask = np.asarray(result.getchannel("A")) > 0
+        foreground_count = int(mask.sum())
+        if foreground_count == 0:
+            return 0.0
+        labels, component_count = ndimage.label(mask)
+        component_sizes = np.bincount(labels.ravel())[1:]
+        if component_count == 0 or component_sizes.size == 0:
+            return 0.0
+        return float(component_sizes.max() / foreground_count)
+
+    def _remove_garment(
+        self,
+        image: Image.Image,
+        garment_category: GarmentCategory,
+    ) -> BackgroundRemovalResult:
+        from rembg import remove
+
+        result = remove(
+            image,
+            session=self._get_cloth_session(),
+            cloth_category=garment_category,
+        ).convert("RGBA")
+        mask_area_ratio = self._mask_area_ratio(result)
+        largest_component_ratio = self._largest_component_ratio(result)
+        metrics = {
+            "mask_area_ratio": mask_area_ratio,
+            "largest_component_ratio": largest_component_ratio,
+        }
+        plausible_area = (
+            MIN_GARMENT_MASK_AREA_RATIO <= mask_area_ratio <= MAX_GARMENT_MASK_AREA_RATIO
+        )
+        sufficiently_connected = largest_component_ratio >= MIN_LARGEST_COMPONENT_RATIO
+        if not plausible_area or not sufficiently_connected:
+            return BackgroundRemovalResult(
+                outcome="low_quality",
+                mode="garment",
+                provider="rembg",
+                provider_version=_installed_package_version("rembg"),
+                model="u2net_cloth_seg",
+                garment_category=garment_category,
+                warning="The detected garment mask is implausible or fragmented",
+                metrics=metrics,
+            )
+        return BackgroundRemovalResult(
+            outcome="accepted",
+            mode="garment",
+            image=result,
+            provider="rembg",
+            provider_version=_installed_package_version("rembg"),
+            model="u2net_cloth_seg",
+            garment_category=garment_category,
+            metrics=metrics,
+        )
 
     def remove(
         self,
@@ -92,49 +159,24 @@ class RembgProvider(BackgroundRemovalProvider):
         mode: BackgroundRemovalMode = "scene",
         garment_category: GarmentCategory | None = None,
     ) -> Image.Image | BackgroundRemovalResult:
+        """Remove a scene background or isolate one garment category."""
+
         from rembg import remove
 
         if mode == "garment":
             if garment_category is None:
                 raise ValueError("Garment category is required for garment extraction")
-            result = remove(
-                image,
-                session=self._get_cloth_session(),
-                cloth_category=garment_category,
-            )
-            result = result.convert("RGBA")
-            alpha_histogram = result.getchannel("A").histogram()
-            pixel_count = result.width * result.height
-            mask_area_ratio = (pixel_count - alpha_histogram[0]) / pixel_count
-            metrics = {"mask_area_ratio": mask_area_ratio}
-            if mask_area_ratio in (0, 1):
-                warning = (
-                    "No garment pixels were detected"
-                    if mask_area_ratio == 0
-                    else "The garment mask covers the full image"
-                )
-                return BackgroundRemovalResult(
-                    outcome="low_quality",
-                    mode="garment",
-                    provider="rembg",
-                    provider_version=_installed_package_version("rembg"),
-                    model="u2net_cloth_seg",
-                    garment_category=garment_category,
-                    warning=warning,
-                    metrics=metrics,
-                )
-            return BackgroundRemovalResult(
-                outcome="accepted",
-                mode="garment",
-                image=result,
-                provider="rembg",
-                provider_version=_installed_package_version("rembg"),
-                model="u2net_cloth_seg",
-                garment_category=garment_category,
-                metrics=metrics,
-            )
+            return self._remove_garment(image, garment_category)
 
-        return remove(image, session=self._get_session())
+        result = remove(image, session=self._get_session())
+        return BackgroundRemovalResult(
+            outcome="accepted",
+            mode="scene",
+            image=result,
+            provider="rembg",
+            provider_version=_installed_package_version("rembg"),
+            model=self.model,
+        )
 
 
 class HttpProvider(BackgroundRemovalProvider):
@@ -148,6 +190,8 @@ class HttpProvider(BackgroundRemovalProvider):
         mode: BackgroundRemovalMode = "scene",
         garment_category: GarmentCategory | None = None,
     ) -> Image.Image | BackgroundRemovalResult:
+        """Use the HTTP scene remover or report garment mode as unsupported."""
+
         if mode == "garment":
             return BackgroundRemovalResult(
                 outcome="unsupported",
@@ -173,7 +217,12 @@ class HttpProvider(BackgroundRemovalProvider):
             )
             response.raise_for_status()
 
-        return Image.open(BytesIO(response.content)).convert("RGBA")
+        return BackgroundRemovalResult(
+            outcome="accepted",
+            mode="scene",
+            image=Image.open(BytesIO(response.content)).convert("RGBA"),
+            provider="http",
+        )
 
 
 _provider: BackgroundRemovalProvider | None = None

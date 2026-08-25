@@ -1,3 +1,4 @@
+import logging
 import shutil
 import uuid
 from datetime import datetime
@@ -11,6 +12,7 @@ from app.config import get_settings
 from app.services import background_removal
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 # Image size configurations
 # Thumbnail: Used in cards/grids. 400px supports ~200px display on retina
@@ -277,6 +279,8 @@ class ImageService:
         mode: background_removal.BackgroundRemovalMode = "scene",
         item_type: str | None = None,
     ) -> dict[str, object]:
+        """Remove a scene background or isolate a garment while preserving undo state."""
+
         base_path = image_path.rsplit(".", 1)[0]
         original_full = self.storage_path / image_path
 
@@ -295,14 +299,26 @@ class ImageService:
 
         image = Image.open(original_full).convert("RGB")
         provider = background_removal.get_provider()
-        if mode == "garment":
-            provider_result = provider.remove(
-                image,
-                mode=mode,
-                garment_category=garment_category,
-            )
-        else:
-            provider_result = provider.remove(image)
+        try:
+            if mode == "garment":
+                provider_result = provider.remove(
+                    image,
+                    mode=mode,
+                    garment_category=garment_category,
+                )
+            else:
+                provider_result = provider.remove(image)
+        except Exception as exc:
+            logger.exception("Background removal provider failed")
+            return {
+                "outcome": "failed",
+                "mode": mode,
+                "provider": provider.__class__.__name__,
+                "model": getattr(provider, "model", None),
+                "garment_category": garment_category,
+                "warning": str(exc),
+                "metrics": {},
+            }
 
         processing_metadata: dict[str, object] = {"outcome": "accepted", "mode": mode}
         if isinstance(provider_result, background_removal.BackgroundRemovalResult):
@@ -330,6 +346,12 @@ class ImageService:
         if not backup_full.exists():
             shutil.copy2(original_full, backup_full)
 
+        if mode == "garment":
+            transparent_path = f"{base_path}_cutout.png"
+            transparent_full = self.storage_path / transparent_path
+            result.convert("RGBA").save(transparent_full, format="PNG", optimize=True)
+            processing_metadata["transparent_path"] = transparent_path
+
         # Composite onto solid color background
         background = Image.new("RGBA", result.size, (*bg_color, 255))
         background.paste(result, mask=result.split()[3])
@@ -348,6 +370,9 @@ class ImageService:
         image = Image.open(backup_full).convert("RGB")
         paths = self._save_all_sizes(image, image_path)
         backup_full.unlink()
+        transparent_full = self.storage_path / f"{image_path.rsplit('.', 1)[0]}_cutout.png"
+        if transparent_full.exists():
+            transparent_full.unlink()
         return paths
 
     def rotate_image(self, image_path: str, direction: str = "cw") -> dict[str, str]:

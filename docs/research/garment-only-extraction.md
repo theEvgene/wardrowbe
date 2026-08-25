@@ -77,3 +77,9 @@ This avoids the current misleading outcome where HTTP 200 means only that a prov
 Measure cold and warm CPU latency, peak resident memory, mask acceptance/rejection, garment retention, and person/mannequin/hanger leakage on the same Docker CPU limits used by self-hosters. There is no trustworthy official CPU latency number for this exact converted cloth model, so local measurement is required.
 
 Advance beyond the first slice only if the worn-person fixtures reliably remove body pixels without materially cutting away the selected garment. If mannequin/hanger/flat-lay results are weak, keep generic foreground removal for those modes and investigate a separately licensed fine-grained parser or a purpose-trained/quantized ONNX model. Do not move to the examined SegFormer checkpoint merely for better labels because its linked license is non-commercial; do not move to SCHP unless the accuracy gain justifies owning an old custom PyTorch stack.
+
+## Local worn-person validation (2026-08-25)
+
+The first-slice implementation was run on the reported worn upper-garment regression with rembg 2.0.81 and `u2net_cloth_seg`. It returned an accepted mask with `mask_area_ratio=0.3513366902` and `largest_component_ratio=0.9999901499`. Visual inspection confirmed that the head, arms, and scene background were removed and the T-shirt was retained, but a lower-body clothing fragment remained attached below the shirt.
+
+This sample demonstrates both the value and the limit of the three-class model: area and connected-component gates cannot detect a semantically wrong but connected clothing region. Keep garment extraction explicit and opt-in, do not enable automatic person routing, and do not close the full issue until privacy-safe golden fixtures cover person, mannequin, hanger, and flat-lay inputs with a semantic leakage check or a stronger suitably licensed parser.

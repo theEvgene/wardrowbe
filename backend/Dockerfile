@@ -15,7 +15,7 @@ COPY requirements.txt requirements-extras.txt ./
 RUN pip install --no-cache-dir -r requirements.txt -r requirements-extras.txt
 
 # Pre-download both scene and garment models so removal works without runtime downloads
-RUN python -c "from rembg import new_session; new_session(); new_session('u2net_cloth_seg')"
+RUN python -c "from rembg import new_session; new_session('u2net'); new_session('u2net_cloth_seg')"
 
 # Copy application code
 COPY . .

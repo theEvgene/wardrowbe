@@ -72,6 +72,18 @@ class ItemUpdate(BaseModel):
     wash_interval: int | None = None
 
 
+class BackgroundRemovalMetadata(BaseModel):
+    outcome: Literal["accepted", "low_quality", "unsupported", "failed"]
+    mode: Literal["scene", "garment"]
+    provider: str | None = None
+    provider_version: str | None = None
+    model: str | None = None
+    garment_category: Literal["upper", "lower", "full"] | None = None
+    transparent_path: str | None = None
+    warning: str | None = None
+    metrics: dict[str, float] = Field(default_factory=dict)
+
+
 class ItemResponse(ItemBase):
     model_config = ConfigDict(from_attributes=True)
 
@@ -100,6 +112,7 @@ class ItemResponse(ItemBase):
     thumbnail_path: str | None = None
     medium_path: str | None = None
     original_image_path: str | None = None
+    background_removal: BackgroundRemovalMetadata | None = None
     tags: dict = Field(default_factory=dict)
     colors: list[str] = Field(default_factory=list)
     primary_color: str | None = None
@@ -315,17 +328,6 @@ class RemoveBackgroundRequest(BaseModel):
         pattern=r"^#[0-9A-Fa-f]{6}$",
         description="Hex color for the replacement background",
     )
-
-
-class BackgroundRemovalMetadata(BaseModel):
-    outcome: Literal["accepted", "low_quality", "unsupported"]
-    mode: Literal["scene", "garment"]
-    provider: str | None = None
-    provider_version: str | None = None
-    model: str | None = None
-    garment_category: Literal["upper", "lower", "full"] | None = None
-    warning: str | None = None
-    metrics: dict[str, float] = Field(default_factory=dict)
 
 
 class RemoveBackgroundResponse(ItemResponse):
