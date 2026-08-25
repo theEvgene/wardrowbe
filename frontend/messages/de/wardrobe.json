@@ -110,6 +110,9 @@
     "actions": {
       "backgroundRemoveError": "Hintergrund konnte nicht entfernt werden",
       "backgroundRemoved": "Hintergrund entfernt",
+      "garmentExtracted": "Kleidungsstück freigestellt",
+      "garmentExtractionLowQuality": "Das Kleidungsstück konnte nicht zuverlässig freigestellt werden. Das Originalbild wurde beibehalten.",
+      "garmentExtractionUnsupported": "Dieser Artikeltyp kann noch nicht von einer Person isoliert werden.",
       "cancelEditing": "Bearbeitung abbrechen",
       "deleteConfirm": "Dieses Stück löschen?",
       "deleteDescription": "„{name}“ wird endgültig aus deinem Kleiderschrank gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
@@ -145,6 +148,7 @@
       "analysisInProgress": "Analyse läuft...",
       "deleteImage": "Bild löschen",
       "findMatchingOutfits": "Passende Outfits finden",
+      "extractGarment": "Kleidungsstück freistellen",
       "reanalyzeWithAI": "Erneut mit KI analysieren",
       "removeBackground": "Hintergrund entfernen",
       "replaceImage": "Bild ersetzen",

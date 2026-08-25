@@ -110,6 +110,9 @@
     "actions": {
       "backgroundRemoveError": "背景の削除に失敗しました",
       "backgroundRemoved": "背景を削除しました",
+      "garmentExtracted": "衣服を切り抜きました",
+      "garmentExtractionLowQuality": "衣服を正確に切り抜けませんでした。元の画像は保持されています。",
+      "garmentExtractionUnsupported": "この種類のアイテムは、人物からの切り抜きにまだ対応していません。",
       "cancelEditing": "編集をキャンセル",
       "deleteConfirm": "このアイテムを削除しますか？",
       "deleteDescription": "「{name}」がワードローブから完全に削除されます。この操作は取り消せません。",
@@ -145,6 +148,7 @@
       "analysisInProgress": "分析中...",
       "deleteImage": "画像を削除",
       "findMatchingOutfits": "マッチするコーデを探す",
+      "extractGarment": "衣服を切り抜く",
       "reanalyzeWithAI": "AIで再分析",
       "removeBackground": "背景を削除",
       "replaceImage": "画像を置き換え",

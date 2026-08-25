@@ -33,6 +33,7 @@ from app.schemas.item import (
     LogWashRequest,
     LogWearRequest,
     RemoveBackgroundRequest,
+    RemoveBackgroundResponse,
     ReorderImagesRequest,
     TaggingProgressResponse,
     WashHistoryResponse,
@@ -1220,13 +1221,13 @@ async def rotate_item_image(
         ) from None
 
 
-@router.post("/{item_id}/remove-background", response_model=ItemResponse)
+@router.post("/{item_id}/remove-background", response_model=RemoveBackgroundResponse)
 async def remove_item_background(
     item_id: UUID,
     request: RemoveBackgroundRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
-) -> ItemResponse:
+) -> RemoveBackgroundResponse:
     item_service = ItemService(db)
     item = await item_service.get_by_id(item_id, current_user.id)
 
@@ -1247,11 +1248,32 @@ async def remove_item_background(
 
     try:
         image_service = ImageService()
-        result = await asyncio.to_thread(image_service.remove_background, item.image_path, bg_color)
-        item.original_image_path = result["original_backup_path"]
-        await db.commit()
-        await db.refresh(item, attribute_names=["original_image_path", "updated_at"])
-        return ItemResponse.model_validate(item)
+        result = await asyncio.to_thread(
+            image_service.remove_background,
+            item.image_path,
+            bg_color,
+            request.mode,
+            item.type,
+        )
+        if result["outcome"] == "accepted":
+            item.original_image_path = str(result["original_backup_path"])
+            await db.commit()
+            await db.refresh(item, attribute_names=["original_image_path", "updated_at"])
+
+        logger.info(
+            "Background removal outcome=%s mode=%s provider=%s version=%s "
+            "model=%s category=%s metrics=%s",
+            result["outcome"],
+            result["mode"],
+            result.get("provider"),
+            result.get("provider_version"),
+            result.get("model"),
+            result.get("garment_category"),
+            result.get("metrics", {}),
+        )
+        response_data = ItemResponse.model_validate(item).model_dump()
+        response_data["background_removal"] = result
+        return RemoveBackgroundResponse.model_validate(response_data)
     except ImportError:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,

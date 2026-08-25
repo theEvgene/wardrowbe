@@ -110,6 +110,9 @@
     "actions": {
       "backgroundRemoveError": "배경 제거 실패",
       "backgroundRemoved": "배경이 제거되었어요",
+      "garmentExtracted": "의류를 분리했어요",
+      "garmentExtractionLowQuality": "의류를 정확하게 분리하지 못했어요. 원본 이미지는 유지됩니다.",
+      "garmentExtractionUnsupported": "이 아이템 유형은 아직 사람에게서 분리할 수 없어요.",
       "cancelEditing": "편집 취소",
       "deleteConfirm": "이 아이템을 삭제하시겠어요?",
       "deleteDescription": "\"{name}\"이(가) 옷장에서 영구적으로 삭제돼요. 이 작업은 되돌릴 수 없어요.",
@@ -145,6 +148,7 @@
       "analysisInProgress": "분석 진행 중...",
       "deleteImage": "이미지 삭제",
       "findMatchingOutfits": "어울리는 코디 찾기",
+      "extractGarment": "의류 분리",
       "reanalyzeWithAI": "AI로 재분석",
       "removeBackground": "배경 제거",
       "replaceImage": "이미지 교체",

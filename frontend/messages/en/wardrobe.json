@@ -110,6 +110,9 @@
     "actions": {
       "backgroundRemoveError": "Failed to remove background",
       "backgroundRemoved": "Background removed",
+      "garmentExtracted": "Garment extracted",
+      "garmentExtractionLowQuality": "The garment could not be isolated reliably. The original image was kept.",
+      "garmentExtractionUnsupported": "This item type cannot be isolated from a person yet.",
       "cancelEditing": "Cancel editing",
       "deleteConfirm": "Delete this item?",
       "deleteDescription": "This will permanently delete \"{name}\" from your wardrobe. This action cannot be undone.",
@@ -145,6 +148,7 @@
       "analysisInProgress": "Analysis in progress...",
       "deleteImage": "Delete image",
       "findMatchingOutfits": "Find matching outfits",
+      "extractGarment": "Extract garment",
       "reanalyzeWithAI": "Re-analyze with AI",
       "removeBackground": "Remove background",
       "replaceImage": "Replace image",

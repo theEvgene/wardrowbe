@@ -110,6 +110,9 @@
     "actions": {
       "backgroundRemoveError": "Échec de la suppression de l'arrière-plan",
       "backgroundRemoved": "Arrière-plan supprimé",
+      "garmentExtracted": "Vêtement isolé",
+      "garmentExtractionLowQuality": "Le vêtement n'a pas pu être isolé de façon fiable. L'image d'origine a été conservée.",
+      "garmentExtractionUnsupported": "Ce type d'article ne peut pas encore être isolé d'une personne.",
       "cancelEditing": "Annuler la modification",
       "deleteConfirm": "Supprimer cet article ?",
       "deleteDescription": "Cela supprimera définitivement « {name} » de votre garde-robe. Cette action est irréversible.",
@@ -145,6 +148,7 @@
       "analysisInProgress": "Analyse en cours...",
       "deleteImage": "Supprimer l'image",
       "findMatchingOutfits": "Trouver des tenues assorties",
+      "extractGarment": "Isoler le vêtement",
       "reanalyzeWithAI": "Ré-analyser avec l'IA",
       "removeBackground": "Supprimer l'arrière-plan",
       "replaceImage": "Remplacer l'image",

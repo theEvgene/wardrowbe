@@ -110,6 +110,9 @@
     "actions": {
       "backgroundRemoveError": "移除背景失敗",
       "backgroundRemoved": "背景已移除",
+      "garmentExtracted": "服裝已擷取",
+      "garmentExtractionLowQuality": "無法可靠地擷取服裝，已保留原始圖片。",
+      "garmentExtractionUnsupported": "暫不支援從人物照片中擷取此類物品。",
       "cancelEditing": "取消編輯",
       "deleteConfirm": "刪除此單品？",
       "deleteDescription": "這將永久刪除衣櫥中的「{name}」。此操作無法復原。",
@@ -145,6 +148,7 @@
       "analysisInProgress": "分析進行中...",
       "deleteImage": "刪除圖片",
       "findMatchingOutfits": "尋找搭配穿搭",
+      "extractGarment": "擷取服裝",
       "reanalyzeWithAI": "用 AI 重新分析",
       "removeBackground": "移除背景",
       "replaceImage": "替換圖片",

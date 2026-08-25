@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
@@ -306,11 +306,30 @@ class ReorderImagesRequest(BaseModel):
 
 
 class RemoveBackgroundRequest(BaseModel):
+    mode: Literal["scene", "garment"] = Field(
+        default="scene",
+        description="Remove the scene background or isolate the wardrobe garment",
+    )
     bg_color: str = Field(
         default="#FFFFFF",
         pattern=r"^#[0-9A-Fa-f]{6}$",
         description="Hex color for the replacement background",
     )
+
+
+class BackgroundRemovalMetadata(BaseModel):
+    outcome: Literal["accepted", "low_quality", "unsupported"]
+    mode: Literal["scene", "garment"]
+    provider: str | None = None
+    provider_version: str | None = None
+    model: str | None = None
+    garment_category: Literal["upper", "lower", "full"] | None = None
+    warning: str | None = None
+    metrics: dict[str, float] = Field(default_factory=dict)
+
+
+class RemoveBackgroundResponse(ItemResponse):
+    background_removal: BackgroundRemovalMetadata
 
 
 class LogWashRequest(BaseModel):

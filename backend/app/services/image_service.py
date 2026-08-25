@@ -274,12 +274,54 @@ class ImageService:
         self,
         image_path: str,
         bg_color: tuple[int, int, int] = (255, 255, 255),
-    ) -> dict[str, str]:
+        mode: background_removal.BackgroundRemovalMode = "scene",
+        item_type: str | None = None,
+    ) -> dict[str, object]:
         base_path = image_path.rsplit(".", 1)[0]
         original_full = self.storage_path / image_path
 
         if not original_full.exists():
             raise ValueError(f"Image not found: {image_path}")
+
+        garment_category = None
+        if mode == "garment":
+            garment_category = background_removal.garment_category_for_item_type(item_type or "")
+            if garment_category is None:
+                return {
+                    "outcome": "unsupported",
+                    "mode": mode,
+                    "warning": f"Garment extraction is not supported for item type: {item_type}",
+                }
+
+        image = Image.open(original_full).convert("RGB")
+        provider = background_removal.get_provider()
+        if mode == "garment":
+            provider_result = provider.remove(
+                image,
+                mode=mode,
+                garment_category=garment_category,
+            )
+        else:
+            provider_result = provider.remove(image)
+
+        processing_metadata: dict[str, object] = {"outcome": "accepted", "mode": mode}
+        if isinstance(provider_result, background_removal.BackgroundRemovalResult):
+            processing_metadata.update(
+                {
+                    "outcome": provider_result.outcome,
+                    "provider": provider_result.provider,
+                    "provider_version": provider_result.provider_version,
+                    "model": provider_result.model,
+                    "garment_category": provider_result.garment_category,
+                    "warning": provider_result.warning,
+                    "metrics": provider_result.metrics,
+                }
+            )
+            if provider_result.outcome != "accepted" or provider_result.image is None:
+                return processing_metadata
+            result = provider_result.image
+        else:
+            result = provider_result
 
         backup_path = f"{base_path}_orig.jpg"
         backup_full = self.storage_path / backup_path
@@ -288,17 +330,14 @@ class ImageService:
         if not backup_full.exists():
             shutil.copy2(original_full, backup_full)
 
-        image = Image.open(original_full).convert("RGB")
-        provider = background_removal.get_provider()
-        result = provider.remove(image)
-
         # Composite onto solid color background
         background = Image.new("RGBA", result.size, (*bg_color, 255))
         background.paste(result, mask=result.split()[3])
         final = background.convert("RGB")
 
-        paths = self._save_all_sizes(final, image_path)
+        paths: dict[str, object] = self._save_all_sizes(final, image_path)
         paths["original_backup_path"] = backup_path
+        paths.update(processing_metadata)
         return paths
 
     def restore_original(self, image_path: str, backup_path: str) -> dict[str, str]:

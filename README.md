@@ -370,6 +370,13 @@ pip install rembg[cpu]  # add to your image, or install manually
 ```
 No config needed — works out of the box. Change model with `BG_REMOVAL_MODEL` (default: `u2net`, options: `isnet-general-use`, `silueta`, `u2netp`).
 
+The item detail view exposes two separate operations:
+
+- **Remove background** uses the configured generic model and is intended for flat-lay, hanger, and other isolated-item photos.
+- **Extract garment** uses the local `u2net_cloth_seg` model to isolate supported tops, bottoms, and full-body garments from a person. Shoes and accessories currently return an unsupported warning without changing the stored image.
+
+Garment extraction rejects empty and full-frame masks as low quality. Rejected or unsupported results preserve the current image and do not create an undo backup. Accepted results keep the same first-backup-wins and restore behavior as generic background removal.
+
 **HTTP provider (e.g. [withoutbg](https://github.com/nicholasgasior/withoutbg)):**
 ```env
 BG_REMOVAL_PROVIDER=http

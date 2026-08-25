@@ -4,7 +4,15 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import { api, getAccessToken, setAccessToken, ApiError, NetworkError } from '@/lib/api';
-import { Item, ItemListResponse, ItemFilter, WashHistoryEntry, ItemImage, TaggingProgress } from '@/lib/types';
+import {
+  Item,
+  ItemListResponse,
+  ItemFilter,
+  WashHistoryEntry,
+  ItemImage,
+  TaggingProgress,
+  RemoveBackgroundResponse,
+} from '@/lib/types';
 import { chunkArray } from '@/lib/utils';
 import { enqueueFiles } from '@/lib/upload-queue';
 import { startDrain } from '@/lib/upload-manager';
@@ -196,11 +204,22 @@ export function useRemoveBackground() {
   const { data: session } = useSession();
 
   return useMutation({
-    mutationFn: async ({ id, bg_color }: { id: string; bg_color?: string }) => {
+    mutationFn: async ({
+      id,
+      bg_color,
+      mode = 'scene',
+    }: {
+      id: string;
+      bg_color?: string;
+      mode?: 'scene' | 'garment';
+    }) => {
       if (session?.accessToken) {
         setAccessToken(session.accessToken as string);
       }
-      return api.post<Item>(`/items/${id}/remove-background`, { bg_color: bg_color ?? '#FFFFFF' });
+      return api.post<RemoveBackgroundResponse>(`/items/${id}/remove-background`, {
+        bg_color: bg_color ?? '#FFFFFF',
+        mode,
+      });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['items'] });

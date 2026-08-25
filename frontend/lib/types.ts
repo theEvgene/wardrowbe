@@ -64,6 +64,21 @@ export interface Item {
   updated_at: string;
 }
 
+export interface BackgroundRemovalMetadata {
+  outcome: 'accepted' | 'low_quality' | 'unsupported';
+  mode: 'scene' | 'garment';
+  provider?: string | null;
+  provider_version?: string | null;
+  model?: string | null;
+  garment_category?: 'upper' | 'lower' | 'full' | null;
+  warning?: string | null;
+  metrics: Record<string, number>;
+}
+
+export interface RemoveBackgroundResponse extends Item {
+  background_removal: BackgroundRemovalMetadata;
+}
+
 export interface ItemListResponse {
   items: Item[];
   total: number;

@@ -17,6 +17,7 @@ import {
   RotateCcw,
   RotateCw,
   Eraser,
+  Scissors,
   Undo2,
   ImagePlus,
   Layers,
@@ -216,11 +217,21 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
     }
   };
 
-  const handleRemoveBackground = async () => {
+  const handleRemoveBackground = async (mode: 'scene' | 'garment') => {
     try {
-      await removeBackground.mutateAsync({ id: item.id });
-      setImageKey((k) => k + 1);
-      toast.success(t('actions.backgroundRemoved'));
+      const result = await removeBackground.mutateAsync({ id: item.id, mode });
+      if (result.background_removal.outcome === 'accepted') {
+        setImageKey((k) => k + 1);
+        toast.success(
+          mode === 'garment'
+            ? t('actions.garmentExtracted')
+            : t('actions.backgroundRemoved')
+        );
+      } else if (result.background_removal.outcome === 'unsupported') {
+        toast.warning(t('actions.garmentExtractionUnsupported'));
+      } else {
+        toast.warning(t('actions.garmentExtractionLowQuality'));
+      }
     } catch (error) {
       console.error('Failed to remove background:', error);
       toast.error(t('actions.backgroundRemoveError'));
@@ -336,7 +347,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={handleRemoveBackground}
+                  onClick={() => handleRemoveBackground('scene')}
                   disabled={removeBackground.isPending || !item.image_url}
                   title={t('titles.removeBackground')}
                 >
@@ -344,6 +355,21 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                     <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
                     <Eraser className="h-5 w-5" />
+                  )}
+                </Button>
+              )}
+              {features?.background_removal && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleRemoveBackground('garment')}
+                  disabled={removeBackground.isPending || !item.image_url}
+                  title={t('titles.extractGarment')}
+                >
+                  {removeBackground.isPending ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Scissors className="h-5 w-5" />
                   )}
                 </Button>
               )}

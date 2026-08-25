@@ -110,6 +110,9 @@
     "actions": {
       "backgroundRemoveError": "Rimozione sfondo fallita",
       "backgroundRemoved": "Sfondo rimosso",
+      "garmentExtracted": "Capo isolato",
+      "garmentExtractionLowQuality": "Non è stato possibile isolare il capo in modo affidabile. L'immagine originale è stata mantenuta.",
+      "garmentExtractionUnsupported": "Questo tipo di articolo non può ancora essere isolato da una persona.",
       "cancelEditing": "Annulla modifica",
       "deleteConfirm": "Eliminare questo capo?",
       "deleteDescription": "Questo eliminerà definitivamente \"{name}\" dal tuo guardaroba. Questa azione non può essere annullata.",
@@ -145,6 +148,7 @@
       "analysisInProgress": "Analisi in corso...",
       "deleteImage": "Elimina immagine",
       "findMatchingOutfits": "Trova outfit abbinati",
+      "extractGarment": "Isola il capo",
       "reanalyzeWithAI": "Rianalizza con IA",
       "removeBackground": "Rimuovi sfondo",
       "replaceImage": "Sostituisci immagine",
