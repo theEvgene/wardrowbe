@@ -19,9 +19,9 @@ async def health_check() -> dict[str, str]:
 
 @router.get("/health/metrics/garment-extraction")
 async def garment_extraction_metrics_snapshot() -> dict[str, Any]:
-    """Expose anonymous process-local performance and mask-quality aggregates."""
+    """Expose anonymous shared performance and mask-quality aggregates."""
 
-    return garment_extraction_metrics.snapshot()
+    return await garment_extraction_metrics.snapshot()
 
 
 @router.get("/capabilities")

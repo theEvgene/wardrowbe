@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "retrieved_at": "2026-08-27",
+  "license": "CC0-1.0",
+  "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "samples": [
+    {
+      "file": "cc0-upper-met-shirt.jpg",
+      "category": "upper",
+      "expected_outcome": "accepted",
+      "scenario": "isolated museum shirt on a contrasting background",
+      "source_page": "https://commons.wikimedia.org/wiki/File:Talismanic_Shirt_MET_ISL108.jpg",
+      "creator": "Metropolitan Museum of Art",
+      "sha256": "af2d59d1662f96b6fbfc074678060ee056a6345bbaf03ac45eee75726b411718"
+    },
+    {
+      "file": "cc0-upper-mariniere.jpg",
+      "category": "upper",
+      "expected_outcome": "low_quality",
+      "scenario": "worn shirt among several people and competing garments",
+      "source_page": "https://commons.wikimedia.org/wiki/File:Man_with_marini%C3%A8re_t-shirt_and_backpack.jpg",
+      "creator": "DimiTalen",
+      "sha256": "599dab3ddcf9d9a724edaf6bcee77021c0beb9ff4dfcafafac4ca4c8a8b56090"
+    },
+    {
+      "file": "cc0-upper-white-tshirt.jpg",
+      "category": "upper",
+      "expected_outcome": "low_quality",
+      "scenario": "low-contrast white shirt on a white background",
+      "source_page": "https://commons.wikimedia.org/wiki/File:White-tshirt.jpg",
+      "creator": "Paulinaela",
+      "sha256": "f6498f8c8c0a2462a067c8cf16acdb231a3afb5d680456154d976827c327bca8"
+    },
+    {
+      "file": "cc0-lower-met-trousers.jpg",
+      "category": "lower",
+      "expected_outcome": "low_quality",
+      "scenario": "isolated striped museum trousers",
+      "source_page": "https://commons.wikimedia.org/wiki/File:Trousers_MET_CI38.23.34_F.jpg",
+      "creator": "Metropolitan Museum of Art",
+      "sha256": "a88157cffa4933dc3d07ac371c989df87ac3c3a30a5d2cd0eed9cb1e68c9f1e2"
+    },
+    {
+      "file": "cc0-lower-black-trousers.jpg",
+      "category": "lower",
+      "expected_outcome": "low_quality",
+      "scenario": "cropped black trouser cuffs next to bare feet",
+      "source_page": "https://commons.wikimedia.org/wiki/File:Human_feet_and_black_trousers.jpg",
+      "creator": "Mn1203",
+      "sha256": "35213672c8102f3ce5d0e8ae0ea0cf09a9da49cae8e045768aed2b276cfa99ac"
+    },
+    {
+      "file": "cc0-lower-black-pants.jpg",
+      "category": "lower",
+      "expected_outcome": "low_quality",
+      "scenario": "close-up reflective black pants",
+      "source_page": "https://commons.wikimedia.org/wiki/File:Black_spandex_disco_pants.jpg",
+      "creator": "Wfilwibg1",
+      "sha256": "1dd04003b04910ae2f3c6ef6b080f6d52ec7a55df96d98f3903b74fec763d61c"
+    },
+    {
+      "file": "cc0-lower-loose-jeans.jpg",
+      "category": "lower",
+      "expected_outcome": "low_quality",
+      "scenario": "worn loose jeans with hand and torso occlusion",
+      "source_page": "https://commons.wikimedia.org/wiki/File:Young_woman_wearing_loose_jeans.jpg",
+      "creator": "Petr Kratochvil",
+      "sha256": "45e03e8297e44e2f12cfdd6ca5982a70d6f4e0ca312542d7527b46f8aace3841"
+    },
+    {
+      "file": "cc0-full-met-dress.jpg",
+      "category": "full",
+      "expected_outcome": "accepted",
+      "scenario": "full museum dress on a mannequin",
+      "source_page": "https://commons.wikimedia.org/wiki/File:Dress_MET_DP269014.jpg",
+      "creator": "Metropolitan Museum of Art",
+      "sha256": "86310b429dab3761770f40b9dc49a6e2ae9ae0054b1286eaf3e1b1f032d9fe08"
+    },
+    {
+      "file": "cc0-full-dress.jpg",
+      "category": "full",
+      "expected_outcome": "low_quality",
+      "scenario": "backlit worn dress on a complex outdoor background",
+      "source_page": "https://commons.wikimedia.org/wiki/File:Woman_in_a_dress_(Unsplash_m1WzQ4jkWF8).jpg",
+      "creator": "Inma Ibáñez",
+      "sha256": "efe3fd6511623e33454c1be2637c4bfa61657213469df18ee0c62e4d85676b4d"
+    }
+  ]
+}

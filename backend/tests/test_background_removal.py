@@ -164,6 +164,28 @@ def test_garment_removal_preserves_transparent_cutout(tmp_path: Path) -> None:
 
 
 class TestRembgProvider:
+    def test_upper_mask_reaching_lower_frame_is_rejected_as_semantic_leakage(self) -> None:
+        leaky_mask = Image.new("RGBA", (100, 100), (255, 0, 0, 0))
+        leaky_mask.paste((255, 0, 0, 255), (25, 30, 75, 80))
+        # A connected lower-garment lobe evades the component-fragmentation gate.
+        leaky_mask.paste((80, 80, 80, 255), (40, 80, 60, 99))
+
+        result = _garment_result_for_mask(leaky_mask)
+
+        assert result.outcome == "low_quality"
+        assert result.image is None
+        assert result.metrics["semantic_leakage_risk"] == 1.0
+        assert "another clothing category" in str(result.warning)
+
+    def test_flat_lay_upper_near_lower_frame_is_not_semantic_leakage(self) -> None:
+        flat_lay_mask = Image.new("RGBA", (100, 100), (255, 0, 0, 0))
+        flat_lay_mask.paste((255, 0, 0, 255), (10, 5, 90, 99))
+
+        result = _garment_result_for_mask(flat_lay_mask)
+
+        assert result.outcome == "accepted"
+        assert result.metrics["semantic_leakage_risk"] == 0.0
+
     def test_fragmented_garment_mask_returns_low_quality_result(self) -> None:
         fragmented_mask = Image.new("RGBA", (100, 100), (255, 0, 0, 0))
         fragmented_mask.paste((255, 0, 0, 255), (10, 10, 40, 40))

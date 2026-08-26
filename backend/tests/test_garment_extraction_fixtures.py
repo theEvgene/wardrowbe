@@ -5,6 +5,8 @@ RUN_GARMENT_MODEL_TESTS=1 in CI or a prepared local environment where rembg
 and the u2net_cloth_seg weights are available.
 """
 
+import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -19,6 +21,10 @@ from app.services.background_removal import (
 )
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "garment_extraction"
+CALIBRATION_DIR = Path(__file__).parent / "fixtures" / "garment_calibration"
+CALIBRATION_CASES = json.loads((CALIBRATION_DIR / "manifest.json").read_text(encoding="utf-8"))[
+    "samples"
+]
 
 pytestmark = pytest.mark.skipif(
     os.getenv("RUN_GARMENT_MODEL_TESTS") != "1",
@@ -73,3 +79,18 @@ def test_real_model_isolates_selected_garment(
     assert result.image is not None
     assert minimum_blue_purity is not None
     assert _selected_blue_purity(result.image) >= minimum_blue_purity
+
+
+@pytest.mark.parametrize("sample", CALIBRATION_CASES, ids=lambda sample: sample["file"])
+def test_real_photo_calibration_matches_documented_baseline(sample: dict[str, str]) -> None:
+    path = CALIBRATION_DIR / sample["file"]
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == sample["sha256"]
+
+    result = RembgProvider().remove(
+        Image.open(path).convert("RGB"),
+        mode="garment",
+        garment_category=sample["category"],
+    )
+
+    assert isinstance(result, BackgroundRemovalResult)
+    assert result.outcome == sample["expected_outcome"]

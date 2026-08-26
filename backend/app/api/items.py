@@ -39,6 +39,7 @@ from app.schemas.item import (
     TaggingProgressResponse,
     WashHistoryResponse,
 )
+from app.services.garment_extraction_metrics import garment_extraction_metrics
 from app.services.image_service import ImageService
 from app.services.item_service import ItemService
 from app.utils.auth import get_current_user
@@ -1351,6 +1352,19 @@ async def remove_item_background(
             item,
             attribute_names=["original_image_path", "background_removal", "updated_at"],
         )
+
+        if request.mode == "garment":
+            result_metrics = dict(result.get("metrics") or {})
+            await garment_extraction_metrics.record(
+                outcome=str(result.get("outcome", "failed")),
+                garment_category=(
+                    str(result["garment_category"])
+                    if result.get("garment_category") is not None
+                    else None
+                ),
+                duration_ms=float(result_metrics.get("duration_ms", 0.0)),
+                quality=result_metrics,
+            )
 
         logger.info(
             "Background removal outcome=%s mode=%s provider=%s version=%s "

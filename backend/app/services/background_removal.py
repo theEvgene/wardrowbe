@@ -21,6 +21,8 @@ GarmentCategory = Literal["upper", "lower", "full"]
 MIN_GARMENT_MASK_AREA_RATIO = 0.01
 MAX_GARMENT_MASK_AREA_RATIO = 0.95
 MIN_LARGEST_COMPONENT_RATIO = 0.85
+MIN_WORN_UPPER_TOP_RATIO = 0.20
+MAX_WORN_UPPER_BOTTOM_RATIO = 0.95
 
 _GARMENT_CATEGORY_BY_ROLE: dict[str, GarmentCategory] = {
     "base_top": "upper",
@@ -109,6 +111,40 @@ class RembgProvider(BackgroundRemovalProvider):
             return 0.0
         return float(component_sizes.max() / foreground_count)
 
+    @staticmethod
+    def _semantic_leakage_metrics(
+        result: Image.Image,
+        garment_category: GarmentCategory,
+    ) -> dict[str, float]:
+        """Flag an upper mask that continues from a torso into the lower frame.
+
+        The cloth model can label attached trousers as upper clothing, producing
+        one perfectly connected component.  A flat-lay garment may legitimately
+        reach the lower image boundary, so this gate only applies when the mask
+        also starts below the upper fifth of the frame (the worn-person pattern).
+        """
+
+        bbox = result.getchannel("A").getbbox()
+        if bbox is None:
+            return {
+                "mask_top_ratio": 0.0,
+                "mask_bottom_ratio": 0.0,
+                "semantic_leakage_risk": 0.0,
+            }
+        _, top, _, bottom = bbox
+        top_ratio = top / result.height
+        bottom_ratio = bottom / result.height
+        leakage_risk = (
+            garment_category == "upper"
+            and top_ratio >= MIN_WORN_UPPER_TOP_RATIO
+            and bottom_ratio >= MAX_WORN_UPPER_BOTTOM_RATIO
+        )
+        return {
+            "mask_top_ratio": top_ratio,
+            "mask_bottom_ratio": bottom_ratio,
+            "semantic_leakage_risk": float(leakage_risk),
+        }
+
     def _remove_garment(
         self,
         image: Image.Image,
@@ -126,12 +162,19 @@ class RembgProvider(BackgroundRemovalProvider):
         metrics = {
             "mask_area_ratio": mask_area_ratio,
             "largest_component_ratio": largest_component_ratio,
+            **self._semantic_leakage_metrics(result, garment_category),
         }
         plausible_area = (
             MIN_GARMENT_MASK_AREA_RATIO <= mask_area_ratio <= MAX_GARMENT_MASK_AREA_RATIO
         )
         sufficiently_connected = largest_component_ratio >= MIN_LARGEST_COMPONENT_RATIO
-        if not plausible_area or not sufficiently_connected:
+        semantic_leakage_risk = metrics["semantic_leakage_risk"] > 0
+        if not plausible_area or not sufficiently_connected or semantic_leakage_risk:
+            warning = (
+                "The upper-garment mask may include another clothing category"
+                if semantic_leakage_risk
+                else "The detected garment mask is implausible or fragmented"
+            )
             return BackgroundRemovalResult(
                 outcome="low_quality",
                 mode="garment",
@@ -139,7 +182,7 @@ class RembgProvider(BackgroundRemovalProvider):
                 provider_version=_installed_package_version("rembg"),
                 model="u2net_cloth_seg",
                 garment_category=garment_category,
-                warning="The detected garment mask is implausible or fragmented",
+                warning=warning,
                 metrics=metrics,
             )
         return BackgroundRemovalResult(

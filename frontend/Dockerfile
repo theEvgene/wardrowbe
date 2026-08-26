@@ -45,7 +45,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/messages ./messages
 # Entrypoint drops to nextjs (remapped to PUID/PGID when set); when the
 # container is started as a non-root uid it execs directly
 COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+RUN sed -i 's/\r$//' /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 ENTRYPOINT ["/docker-entrypoint.sh"]
 
 EXPOSE 3000

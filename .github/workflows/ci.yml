@@ -2,10 +2,23 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      run_model_calibration:
+        description: Run the real ONNX model against the licensed photo corpus
+        required: false
+        default: false
+        type: boolean
   push:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend-lint:
@@ -244,6 +257,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: ./backend
+          load: true
           push: false
           tags: wardrowbe/backend:test
           cache-from: type=gha,scope=backend
@@ -253,7 +267,61 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: ./frontend
+          load: true
           push: false
           tags: wardrowbe/frontend:test
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
+
+      - name: Smoke backend image
+        run: >-
+          docker run --rm --entrypoint python wardrowbe/backend:test
+          -c "from app.main import app; assert app"
+
+      - name: Smoke frontend image
+        run: |
+          docker run --detach --name wardrowbe-frontend-smoke \
+            --publish 3000:3000 \
+            --env BACKEND_URL=http://127.0.0.1:8000 \
+            --env NEXTAUTH_URL=http://127.0.0.1:3000 \
+            --env NEXTAUTH_SECRET=ci-runtime-smoke-secret \
+            wardrowbe/frontend:test
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/login > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs wardrowbe-frontend-smoke
+          exit 1
+
+      - name: Stop runtime smoke containers
+        if: always()
+        run: docker rm --force wardrowbe-frontend-smoke 2>/dev/null || true
+
+  model-calibration:
+    name: Licensed Real-photo Model Calibration
+    if: github.event_name == 'workflow_dispatch' && inputs.run_model_calibration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build model image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./backend
+          load: true
+          push: false
+          tags: wardrowbe/backend:calibration
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Run strict licensed calibration baseline
+        run: >-
+          docker run --rm --entrypoint python
+          --volume "${{ github.workspace }}/backend/tests/fixtures/garment_calibration:/fixtures:ro"
+          wardrowbe/backend:calibration
+          -m scripts.calibrate_garment_extraction --fixtures /fixtures --strict

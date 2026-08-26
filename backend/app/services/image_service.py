@@ -11,7 +11,6 @@ from PIL import Image, ImageOps
 
 from app.config import get_settings
 from app.services import background_removal
-from app.services.garment_extraction_metrics import garment_extraction_metrics
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -292,16 +291,6 @@ class ImageService:
             request_metrics = dict(result.get("metrics") or {})
             request_metrics["duration_ms"] = duration_ms
             result["metrics"] = request_metrics
-            garment_extraction_metrics.record(
-                outcome=str(result.get("outcome", "failed")),
-                garment_category=(
-                    str(result["garment_category"])
-                    if result.get("garment_category") is not None
-                    else None
-                ),
-                duration_ms=duration_ms,
-                quality=request_metrics,
-            )
             return result
 
         base_path = image_path.rsplit(".", 1)[0]

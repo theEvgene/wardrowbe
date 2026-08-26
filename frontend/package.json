@@ -2,6 +2,9 @@
   "name": "wardrobe-ai-frontend",
   "version": "1.2.0",
   "private": true,
+  "engines": {
+    "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "smoke:full-stack": "node scripts/full-stack-smoke.mjs",
     "i18n:keys": "node scripts/i18n-keys.mjs",
     "i18n:parity": "node scripts/i18n-check.mjs",
     "i18n:scan": "node scripts/i18n-scan.mjs",

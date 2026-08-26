@@ -167,6 +167,18 @@ curl http://localhost:8000/api/v1/health
 
 To build the images from source instead of pulling them, use the development stack below (`docker-compose.dev.yml`), which builds locally and enables hot reload.
 
+For a repeatable production-mode deployment from the current checkout, including
+image builds, migrations, service health and the real browser/backend/model smoke
+path, run on Windows:
+
+```powershell
+.\scripts\deploy-main-and-smoke.ps1 -EnvironmentFile .env
+```
+
+The smoke creates its own dev-mode user and wardrobe item, verifies the persisted
+transparent garment cutout plus shared operational metrics, and removes the item
+afterward. Existing database, Redis and wardrobe volumes are preserved.
+
 #### Step 4: Access the App
 
 - **Frontend:** http://localhost:3000

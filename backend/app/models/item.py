@@ -196,7 +196,7 @@ class DuplicateMatchCandidate(Base):
         UUID(as_uuid=True), ForeignKey("clothing_items.id", ondelete="RESTRICT")
     )
     cosine_score: Mapped[Decimal | None] = mapped_column(Numeric(6, 5))
-    matcher_revision: Mapped[str] = mapped_column(String(100), nullable=False)
+    matcher_revision: Mapped[str] = mapped_column(String(255), nullable=False)
     evidence: Mapped[dict] = mapped_column(JSONB, default=dict)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

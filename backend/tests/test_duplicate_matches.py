@@ -271,6 +271,53 @@ async def test_similar_embeddings_create_pending_candidate_without_merging_items
 
 
 @pytest.mark.asyncio
+async def test_production_model_revision_fits_duplicate_candidate(
+    test_user,
+    db_session: AsyncSession,
+):
+    first = ClothingItem(
+        user_id=test_user.id,
+        type="shirt",
+        image_path="test/long-revision-front.jpg",
+        status=ItemStatus.ready,
+    )
+    second = ClothingItem(
+        user_id=test_user.id,
+        type="shirt",
+        image_path="test/long-revision-back.jpg",
+        status=ItemStatus.ready,
+    )
+    db_session.add_all([first, second])
+    await db_session.commit()
+
+    provider = FakeEmbeddingProvider(
+        {
+            "long-revision-front.jpg": [1.0, 0.0, 0.0],
+            "long-revision-back.jpg": [1.0, 0.0, 0.0],
+        }
+    )
+    provider.model = "facebook/dinov2-small"
+    provider.model_revision = "ed25f3a31f01632728cabb09d1542f84ab7b0056"
+    provider.preprocess_revision = "transformers-4.52.3-slow-image-processor-v1"
+    expected_revision = (
+        f"{provider.model}:{provider.model_revision}:{provider.preprocess_revision}"
+    )
+    assert len(expected_revision) > 100
+
+    service = GarmentIdentityService(
+        db_session,
+        provider=provider,
+        review_threshold=0.95,
+        storage_root=Path("/tmp"),
+    )
+
+    assert await service.analyze_primary_image(first.id, test_user.id) == []
+    candidates = await service.analyze_primary_image(second.id, test_user.id)
+
+    assert candidates[0].matcher_revision == expected_revision
+
+
+@pytest.mark.asyncio
 async def test_manual_incompatible_body_roles_veto_visual_match(
     test_user,
     db_session: AsyncSession,
