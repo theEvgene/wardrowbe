@@ -18,9 +18,12 @@ Return ONLY a JSON array:
 [
   {{
     "items": [{source_number}, ...other_item_numbers],
-    "headline": "Short outfit title (3-5 words)",
-    "highlights": ["Why item X complements source", "Color/style note", "Occasion fit"],
-    "styling_tip": "Brief practical advice"
+    "headline": {{"text": "Short outfit title (3-5 words)", "items": [{source_number}, 2]}},
+    "highlights": [
+      {{"text": "Why the referenced items complement each other", "items": [{source_number}, 2]}},
+      {{"text": "Color/style note about referenced items", "items": [2]}}
+    ],
+    "styling_tip": {{"text": "Brief practical advice", "items": [{source_number}, 2]}}
   }}
 ]
 
@@ -28,4 +31,7 @@ RULES:
 - Each outfit must be distinctly different in style or occasion
 - Consider color coordination and occasion formality
 - Explain the pairing logic in highlights
+- Every headline, highlight, and styling tip MUST be an object with "text" and "items".
+- "items" lists every item number mentioned or described by that text.
+- Use only the exact type and color metadata shown for those referenced item numbers.
 - Output ONLY the JSON array, no other text

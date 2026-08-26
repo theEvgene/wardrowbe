@@ -10,8 +10,16 @@ from sqlalchemy.orm import selectinload
 from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import FamilyOutfitRating, Outfit, OutfitItem, OutfitSource, OutfitStatus
 from app.models.user import User
-from app.services.ai_service import AIResponseTruncatedError, AIService, require_internal_ai
-from app.utils.clothing import deduplicate_by_body_slot
+from app.services.ai_service import (
+    VALID_COLORS,
+    VALID_FORMALITY,
+    VALID_MATERIALS,
+    VALID_PATTERNS,
+    AIResponseTruncatedError,
+    AIService,
+    require_internal_ai,
+)
+from app.utils.clothing import ITEM_ROLE, deduplicate_by_body_slot
 from app.utils.prompts import load_prompt
 from app.utils.timezone import get_user_today
 
@@ -174,6 +182,139 @@ class PairingService:
 
         raise ValueError(f"Could not parse AI response as JSON: {content[:200]}")
 
+    @staticmethod
+    def _item_copy_label(item: ClothingItem) -> str:
+        parts = []
+        if item.primary_color:
+            parts.append(item.primary_color.lower())
+        if item.pattern and item.pattern.lower() != "solid":
+            parts.append(item.pattern.lower())
+        parts.append((item.type or "item").lower())
+        return " ".join(parts)
+
+    @staticmethod
+    def _copy_metadata_terms(item: ClothingItem) -> set[str]:
+        terms = {(item.type or "").lower()}
+        if item.subtype:
+            terms.add(item.subtype.lower())
+        if item.primary_color:
+            terms.add(item.primary_color.lower())
+        terms.update(color.lower() for color in (item.colors or []))
+        if item.pattern:
+            terms.add(item.pattern.lower())
+        if item.material:
+            terms.add(item.material.lower())
+        if item.formality:
+            terms.add(item.formality.lower())
+        return {term for term in terms if term}
+
+    @staticmethod
+    def _mentioned_metadata_terms(text: str) -> set[str]:
+        vocabulary = (
+            set(VALID_COLORS)
+            | set(VALID_PATTERNS)
+            | set(VALID_MATERIALS)
+            | set(VALID_FORMALITY)
+            | set(ITEM_ROLE)
+        )
+        lowered = text.lower()
+        return {
+            term
+            for term in vocabulary
+            if re.search(rf"(?<![\w-]){re.escape(term)}(?:es|s)?(?![\w-])", lowered)
+        }
+
+    def _deterministic_pairing_copy(
+        self,
+        final_ids: list[UUID],
+        items_by_id: dict[UUID, ClothingItem],
+        id_to_number: dict[UUID, int],
+    ) -> tuple[str, str, list[str]]:
+        labels = [self._item_copy_label(items_by_id[item_id]) for item_id in final_ids]
+        reasoning = f"Selected outfit: {', '.join(labels)}."
+        style_notes = "Wear these selected pieces together and adjust accessories for the occasion."
+        highlights = [
+            f"Item {id_to_number[item_id]}: {self._item_copy_label(items_by_id[item_id])}."
+            for item_id in final_ids
+        ]
+        return reasoning, style_notes, highlights
+
+    def _sanitize_pairing_copy(
+        self,
+        pairing: dict,
+        final_ids: list[UUID],
+        number_map: dict[int, UUID],
+        items_by_id: dict[UUID, ClothingItem],
+        selection_errors: list[str],
+    ) -> tuple[str, str, dict]:
+        id_to_number = {item_id: number for number, item_id in number_map.items()}
+        final_numbers = {id_to_number[item_id] for item_id in final_ids}
+        errors = list(selection_errors)
+
+        def validate_block(value: object, field: str) -> str | None:
+            if not isinstance(value, dict):
+                errors.append(f"unstructured_copy:{field}")
+                return None
+            text = value.get("text")
+            references = value.get("items")
+            if not isinstance(text, str) or not text.strip():
+                errors.append(f"invalid_copy_text:{field}")
+                return None
+            if not isinstance(references, list) or not references:
+                errors.append(f"missing_copy_references:{field}")
+                return None
+
+            referenced_numbers: set[int] = set()
+            for reference in references:
+                try:
+                    number = int(reference)
+                except (TypeError, ValueError):
+                    errors.append(f"invalid_copy_reference:{field}:{reference}")
+                    continue
+                if number not in final_numbers:
+                    errors.append(f"invalid_copy_reference:{field}:{number}")
+                    continue
+                referenced_numbers.add(number)
+
+            allowed_terms = set()
+            for number in referenced_numbers:
+                allowed_terms.update(self._copy_metadata_terms(items_by_id[number_map[number]]))
+            for term in self._mentioned_metadata_terms(text):
+                if term not in allowed_terms:
+                    errors.append(f"metadata_mismatch:{field}:{term}")
+            return text.strip()
+
+        headline = validate_block(pairing.get("headline"), "headline")
+        styling_tip = validate_block(pairing.get("styling_tip"), "styling_tip")
+        raw_highlights = pairing.get("highlights")
+        highlights: list[str] = []
+        if not isinstance(raw_highlights, list) or not raw_highlights:
+            errors.append("invalid_copy_text:highlights")
+        else:
+            for index, highlight in enumerate(raw_highlights):
+                validated = validate_block(highlight, f"highlights[{index}]")
+                if validated:
+                    highlights.append(validated)
+
+        if errors:
+            headline, styling_tip, highlights = self._deterministic_pairing_copy(
+                final_ids, items_by_id, id_to_number
+            )
+
+        sanitized_raw_response = {
+            "items": sorted(final_numbers),
+            "headline": headline,
+            "highlights": highlights,
+            "styling_tip": styling_tip,
+            "validation": {
+                "valid": not errors,
+                "fallback": "deterministic" if errors else None,
+                "errors": sorted(set(errors)),
+            },
+            "raw_ai_output": pairing,
+        }
+        return headline or "Selected outfit", styling_tip or "", sanitized_raw_response
+
     async def generate_pairings(
         self,
         user: User,
@@ -245,13 +386,16 @@ class PairingService:
 
         # Build type map for body-slot validation
         item_type_map: dict[UUID, str] = {source_item.id: (source_item.type or "").lower()}
+        items_by_id: dict[UUID, ClothingItem] = {source_item.id: source_item}
         for item in available_items:
             item_type_map[item.id] = (item.type or "").lower()
+            items_by_id[item.id] = item
 
         for pairing in pairings_data[:num_pairings]:
             # Get item numbers from the pairing
             selected_numbers = pairing.get("items", [])
             valid_ids = []
+            selection_errors: list[str] = []
 
             for num in selected_numbers:
                 try:
@@ -260,19 +404,37 @@ class PairingService:
                         valid_ids.append(number_map[num_int])
                     else:
                         logger.warning(f"AI selected invalid item number: {num}")
+                        selection_errors.append(f"invalid_item_number:{num}")
                 except (ValueError, TypeError):
                     logger.warning(f"AI returned non-numeric item: {num}")
+                    selection_errors.append(f"invalid_item_number:{num}")
 
             # Ensure source item is included
             if source_item.id not in valid_ids:
                 valid_ids.insert(0, source_item.id)
+                selection_errors.append(f"source_item_inserted:{source_num}")
 
             # Deduplicate by body slot (e.g. prevent shorts + pants)
+            pre_dedup_ids = list(valid_ids)
             valid_ids = deduplicate_by_body_slot(valid_ids, item_type_map)
+            id_to_number = {item_id: number for number, item_id in number_map.items()}
+            selection_errors.extend(
+                f"removed_by_body_slot:{id_to_number[item_id]}"
+                for item_id in pre_dedup_ids
+                if item_id not in valid_ids
+            )
 
             if len(valid_ids) < 2:
                 logger.warning("Pairing has too few valid items, skipping")
                 continue
+
+            reasoning, style_notes, sanitized_raw_response = self._sanitize_pairing_copy(
+                pairing,
+                valid_ids,
+                number_map,
+                items_by_id,
+                selection_errors,
+            )
 
             # Create outfit
             outfit = Outfit(
@@ -282,9 +444,9 @@ class PairingService:
                 source=OutfitSource.pairing,
                 source_item_id=source_item_id,
                 status=OutfitStatus.pending,
-                reasoning=pairing.get("headline"),
-                style_notes=pairing.get("styling_tip"),
-                ai_raw_response=pairing,
+                reasoning=reasoning,
+                style_notes=style_notes,
+                ai_raw_response=sanitized_raw_response,
             )
             self.db.add(outfit)
             await self.db.flush()

@@ -1,4 +1,6 @@
+import json
 from datetime import date
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -16,6 +18,8 @@ from app.models.outfit import (
     OutfitStatus,
 )
 from app.models.user import User
+from app.services import pairing_service as pairing_module
+from app.services.pairing_service import PairingService
 
 
 def _make_item(user_id, item_type="shirt", **kwargs) -> ClothingItem:
@@ -45,6 +49,203 @@ def _make_pairing(user_id, items: list[ClothingItem], source_item=None) -> Outfi
         )
         outfit.items.append(outfit_item)
     return outfit
+
+
+async def _generate_with_ai_payload(
+    monkeypatch,
+    db_session: AsyncSession,
+    test_user,
+    source: ClothingItem,
+    available: list[ClothingItem],
+    payload: dict,
+) -> Outfit:
+    class StubAIService:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def generate_text(self, prompt, return_metadata=False):
+            return SimpleNamespace(content=json.dumps([payload]), model="test-model")
+
+    monkeypatch.setattr(pairing_module, "require_internal_ai", lambda _capability: None)
+    monkeypatch.setattr(pairing_module, "AIService", StubAIService)
+    test_user.preferences = None
+    db_session.add_all([source, *available])
+    await db_session.flush()
+
+    outfits = await PairingService(db_session).generate_pairings(test_user, source.id, 1)
+    assert len(outfits) == 1
+    return outfits[0]
+
+
+class TestPairingCopyValidation:
+    @pytest.mark.asyncio
+    async def test_valid_structured_copy_is_preserved(
+        self, monkeypatch, db_session: AsyncSession, test_user
+    ):
+        source = _make_item(test_user.id, "shirt", primary_color="white")
+        pants = _make_item(test_user.id, "pants", primary_color="navy", pattern="solid")
+        shoes = _make_item(test_user.id, "shoes", primary_color="brown")
+        outfit = await _generate_with_ai_payload(
+            monkeypatch,
+            db_session,
+            test_user,
+            source,
+            [pants, shoes],
+            {
+                "items": [1, 2, 3],
+                "headline": {"text": "White shirt with navy pants", "items": [1, 2]},
+                "highlights": [
+                    {"text": "Brown shoes finish the outfit", "items": [3]},
+                ],
+                "styling_tip": {"text": "Keep the white shirt crisp", "items": [1]},
+            },
+        )
+
+        assert outfit.reasoning == "White shirt with navy pants"
+        assert outfit.style_notes == "Keep the white shirt crisp"
+        assert outfit.ai_raw_response["highlights"] == ["Brown shoes finish the outfit"]
+        assert outfit.ai_raw_response["validation"] == {
+            "valid": True,
+            "fallback": None,
+            "errors": [],
+        }
+
+    @pytest.mark.asyncio
+    async def test_structured_claim_with_wrong_item_metadata_uses_fallback(
+        self, monkeypatch, db_session: AsyncSession, test_user
+    ):
+        source = _make_item(test_user.id, "shirt", primary_color="white")
+        pants = _make_item(test_user.id, "pants", primary_color="navy")
+        shoes = _make_item(test_user.id, "shoes", primary_color="brown")
+        outfit = await _generate_with_ai_payload(
+            monkeypatch,
+            db_session,
+            test_user,
+            source,
+            [pants, shoes],
+            {
+                "items": [1, 2, 3],
+                "headline": {"text": "Simple outfit", "items": [1, 2, 3]},
+                "highlights": [
+                    {"text": "The red graphic shirt adds contrast", "items": [2]},
+                ],
+                "styling_tip": {"text": "Wear together", "items": [1, 2, 3]},
+            },
+        )
+
+        visible_copy = " ".join(
+            [outfit.reasoning or "", outfit.style_notes or ""]
+            + outfit.ai_raw_response["highlights"]
+        ).lower()
+        assert "red" not in visible_copy
+        assert (
+            "metadata_mismatch:highlights[0]:red" in outfit.ai_raw_response["validation"]["errors"]
+        )
+        assert (
+            "metadata_mismatch:highlights[0]:shirt"
+            in outfit.ai_raw_response["validation"]["errors"]
+        )
+        assert (
+            "metadata_mismatch:highlights[0]:graphic"
+            in outfit.ai_raw_response["validation"]["errors"]
+        )
+
+    @pytest.mark.asyncio
+    async def test_phantom_garment_prose_falls_back_to_selected_item_metadata(
+        self, monkeypatch, db_session: AsyncSession, test_user
+    ):
+        source = _make_item(
+            test_user.id,
+            "t-shirt",
+            name="Beige floral tee",
+            primary_color="beige",
+            pattern="floral",
+        )
+        shorts = _make_item(test_user.id, "shorts", primary_color="blue")
+        shoes = _make_item(test_user.id, "shoes", primary_color="white")
+        outfit = await _generate_with_ai_payload(
+            monkeypatch,
+            db_session,
+            test_user,
+            source,
+            [shorts, shoes],
+            {
+                "items": [1, 2, 3],
+                "headline": "Red graphic tee look",
+                "highlights": ["Add a black T-shirt for contrast"],
+                "styling_tip": "Let the red top lead",
+            },
+        )
+
+        visible_copy = " ".join(
+            [outfit.reasoning or "", outfit.style_notes or ""]
+            + outfit.ai_raw_response["highlights"]
+        ).lower()
+        assert "red" not in visible_copy
+        assert "black" not in visible_copy
+        assert outfit.ai_raw_response["validation"]["fallback"] == "deterministic"
+        assert outfit.ai_raw_response["raw_ai_output"]["headline"] == "Red graphic tee look"
+
+    @pytest.mark.asyncio
+    async def test_invalid_item_number_cannot_reach_visible_copy(
+        self, monkeypatch, db_session: AsyncSession, test_user
+    ):
+        source = _make_item(test_user.id, "shirt", primary_color="white")
+        pants = _make_item(test_user.id, "pants", primary_color="navy")
+        shoes = _make_item(test_user.id, "shoes", primary_color="brown")
+        outfit = await _generate_with_ai_payload(
+            monkeypatch,
+            db_session,
+            test_user,
+            source,
+            [pants, shoes],
+            {
+                "items": [1, 2, 99],
+                "headline": "Item 99 finishes it",
+                "highlights": ["Item 99 adds a jacket"],
+                "styling_tip": "Layer item 99",
+            },
+        )
+
+        visible_copy = " ".join(
+            [outfit.reasoning or "", outfit.style_notes or ""]
+            + outfit.ai_raw_response["highlights"]
+        ).lower()
+        assert "99" not in visible_copy
+        assert "jacket" not in visible_copy
+        assert "invalid_item_number:99" in outfit.ai_raw_response["validation"]["errors"]
+
+    @pytest.mark.asyncio
+    async def test_copy_is_rewritten_after_body_slot_deduplication(
+        self, monkeypatch, db_session: AsyncSession, test_user
+    ):
+        source = _make_item(test_user.id, "t-shirt", primary_color="beige")
+        shorts = _make_item(test_user.id, "shorts", primary_color="blue")
+        pants = _make_item(test_user.id, "pants", primary_color="black")
+        shoes = _make_item(test_user.id, "shoes", primary_color="white")
+        outfit = await _generate_with_ai_payload(
+            monkeypatch,
+            db_session,
+            test_user,
+            source,
+            [shorts, pants, shoes],
+            {
+                "items": [1, 2, 3, 4],
+                "headline": "Black pants anchor",
+                "highlights": ["Item 3 black pants balance the tee"],
+                "styling_tip": "Cuff the black pants",
+            },
+        )
+
+        persisted_item_ids = {outfit_item.item_id for outfit_item in outfit.items}
+        assert persisted_item_ids == {source.id, shorts.id, shoes.id}
+        visible_copy = " ".join(
+            [outfit.reasoning or "", outfit.style_notes or ""]
+            + outfit.ai_raw_response["highlights"]
+        ).lower()
+        assert "black" not in visible_copy
+        assert "pants" not in visible_copy
+        assert "removed_by_body_slot:3" in outfit.ai_raw_response["validation"]["errors"]
 
 
 @pytest.fixture
