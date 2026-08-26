@@ -1,11 +1,14 @@
 import asyncio
 import os
 import subprocess
+import sys
+import tempfile
+from pathlib import Path
 
 # Set test environment — clear OIDC vars so auth tests run with a known state
 os.environ["DEBUG"] = "true"
 os.environ["SECRET_KEY"] = "change-me-in-production"
-os.environ["STORAGE_PATH"] = "/tmp/wardrobe_test"
+os.environ["STORAGE_PATH"] = str(Path(tempfile.gettempdir()) / "wardrobe_test")
 os.environ.pop("OIDC_ISSUER_URL", None)
 os.environ.pop("OIDC_CLIENT_ID", None)
 os.environ.pop("OIDC_CLIENT_SECRET", None)
@@ -49,7 +52,7 @@ async def _ensure_test_db():
 
     env = {**os.environ, "DATABASE_URL": TEST_DATABASE_URL}
     subprocess.run(
-        ["python", "-m", "alembic", "upgrade", "head"],
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
         env=env,
         check=True,
         capture_output=True,
