@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
+import Image from 'next/image';
 import { Upload, X, Loader2, CheckCircle2, AlertCircle, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -79,9 +80,10 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
 
   // Cleanup blob URLs on unmount to prevent memory leaks
   useEffect(() => {
+    const blobUrls = blobUrlsRef.current;
     return () => {
-      blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-      blobUrlsRef.current.clear();
+      blobUrls.forEach((url) => URL.revokeObjectURL(url));
+      blobUrls.clear();
     };
   }, []);
 
@@ -292,9 +294,12 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
                 </div>
               ) : (
                 <div className="relative">
-                  <img
+                  <Image
                     src={preview}
                     alt={t('previewAlt')}
+                    width={800}
+                    height={192}
+                    unoptimized
                     className="w-full h-48 object-cover rounded-lg"
                   />
                   <Button
@@ -442,10 +447,13 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
                     <ScrollArea className="h-[200px] rounded-md border p-2">
                       <div className="grid grid-cols-4 gap-2">
                         {bulkFiles.map((f) => (
-                          <div key={f.id} className="relative group">
-                            <img
+                          <div key={f.id} className="relative group aspect-square">
+                            <Image
                               src={f.preview}
                               alt={f.file.name}
+                              fill
+                              sizes="(max-width: 640px) 25vw, 120px"
+                              unoptimized
                               className="w-full aspect-square object-cover rounded-md"
                             />
                             <Button

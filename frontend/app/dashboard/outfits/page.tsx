@@ -300,7 +300,10 @@ function OutfitsPageContent() {
     updateQuery({ month: nextRef });
   };
 
-  const calendarOutfits: Outfit[] = calendarQuery.data?.outfits ?? [];
+  const calendarOutfits: Outfit[] = useMemo(
+    () => calendarQuery.data?.outfits ?? [],
+    [calendarQuery.data?.outfits],
+  );
   const dateSet = useMemo(() => outfitDateSet(calendarOutfits), [calendarOutfits]);
   const dateMap = useMemo(() => outfitsByDate(calendarOutfits), [calendarOutfits]);
   const selectedDayOutfits: Outfit[] = selectedDate

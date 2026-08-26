@@ -396,7 +396,7 @@ export default function SettingsPage() {
       window.removeEventListener('beforeunload', onBeforeUnload);
       history.pushState = origPush;
     };
-  }, [isDirty]);
+  }, [isDirty, t]);
 
   const handleToggleUnits = () => {
     const newSystem: UnitSystem = unitSystem === 'metric' ? 'imperial' : 'metric';

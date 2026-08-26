@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { signIn, getProviders, useSession } from 'next-auth/react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -198,7 +199,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <div className="flex justify-center mb-4">
-            <img src="/logo.svg" alt="Wardrowbe" className="h-16 w-16" />
+            <Image src="/logo.svg" alt="Wardrowbe" width={64} height={64} />
           </div>
           <h1 className="text-3xl font-bold tracking-tight">{t('title')}</h1>
           <p className="mt-2 text-muted-foreground">

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { getTranslations } from 'next-intl/server';
 
 export default async function Home() {
@@ -8,7 +9,7 @@ export default async function Home() {
     <main className="flex min-h-screen flex-col items-center justify-center p-24">
       <div className="text-center">
         <div className="flex justify-center mb-6">
-          <img src="/logo.svg" alt={t('brandName')} className="h-20 w-20" />
+          <Image src="/logo.svg" alt={t('brandName')} width={80} height={80} />
         </div>
         <h1 className="text-4xl font-bold tracking-tight mb-4">
           {t('brandName')}

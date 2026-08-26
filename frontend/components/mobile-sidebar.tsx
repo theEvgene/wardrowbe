@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { X, Home, Shirt, Sparkles, Layers, LayoutGrid, History, BarChart3, Brain, Settings, Users, Bell, HeartHandshake } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -80,7 +81,7 @@ export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
         <div className="flex h-full flex-col gap-y-5 overflow-y-auto px-6 pb-4">
           <div className="flex h-16 shrink-0 items-center">
             <Link href="/dashboard" className="flex items-center gap-3" onClick={onClose}>
-              <img src="/logo.svg" alt={t('brandAlt')} className="h-8 w-8" />
+              <Image src="/logo.svg" alt={t('brandAlt')} width={32} height={32} />
               <span className="text-xl font-bold">{t('brandName')}</span>
             </Link>
           </div>

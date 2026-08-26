@@ -41,7 +41,7 @@ export function OutfitCalendar({
   onMonthChange,
 }: OutfitCalendarProps) {
   const t = useTranslations('outfits.calendar');
-  const currentMonth = new Date(year, month - 1, 1);
+  const currentMonth = useMemo(() => new Date(year, month - 1, 1), [year, month]);
 
   const outfitsByDate = useMemo(() => buildCalendarIndicators(outfits), [outfits]);
 

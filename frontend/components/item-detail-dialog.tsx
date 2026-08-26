@@ -133,7 +133,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
       setIsEditing(false);
       setActiveImageIndex(0);
     }
-  }, [item?.id]);
+  }, [item]);
 
   if (!item) return null;
 
