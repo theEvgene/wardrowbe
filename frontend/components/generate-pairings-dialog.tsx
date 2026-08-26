@@ -57,8 +57,10 @@ export function GeneratePairingsDialog({
   };
 
   const handleViewPairings = () => {
-    onOpenChange(false);
     setGeneratedPairings(null);
+    // Let the route transition unmount both nested dialogs. Closing the child
+    // first can also close the parent item dialog, whose URL cleanup races this
+    // navigation and sends the user back to the wardrobe.
     router.push('/dashboard/pairings');
   };
 
