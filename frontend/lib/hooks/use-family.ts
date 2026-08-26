@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
-import { api, setAccessToken } from '@/lib/api';
+import { api, ApiError, setAccessToken } from '@/lib/api';
 import { Family, FamilyCreateResponse, JoinFamilyResponse, FamilyMember } from '@/lib/types';
 
 // Helper to set token if available (for NextAuth mode)
@@ -19,7 +19,14 @@ export function useFamily() {
 
   return useQuery({
     queryKey: ['family'],
-    queryFn: () => api.get<Family>('/families/me'),
+    queryFn: async (): Promise<Family | null> => {
+      try {
+        return await api.get<Family>('/families/me');
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      }
+    },
     enabled: status !== 'loading',
     retry: false, // Don't retry on 404 (user not in family)
   });

@@ -28,14 +28,14 @@ export default function DashboardLayout({
   useEffect(() => {
     // If auth check completed and user is not authenticated, redirect to login
     if (!isLoading && !isAuthenticated) {
-      router.push('/login');
+      router.replace('/login');
     }
   }, [isLoading, isAuthenticated, router]);
 
   // Check onboarding status from API user
   useEffect(() => {
     if (user && user.onboarding_completed === false) {
-      router.push('/onboarding');
+      router.replace('/onboarding');
     }
   }, [user, router]);
 
@@ -52,6 +52,17 @@ export default function DashboardLayout({
 
   if (!isAuthenticated) {
     return null;
+  }
+
+  // Effects run after render. Keep dashboard children unmounted while the
+  // onboarding redirect is pending so their family/weather queries cannot
+  // turn expected setup gaps into global error notifications.
+  if (user?.onboarding_completed === false) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
   return (

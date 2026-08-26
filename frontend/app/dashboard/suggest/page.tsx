@@ -569,7 +569,7 @@ export default function SuggestPage() {
       {!outfit ? (
         <div className="space-y-6">
           {/* Weather context */}
-          <WeatherCard weather={weather} isLoading={weatherLoading} temperatureUnit={temperatureUnit} t={t} />
+          <WeatherCard weather={weather ?? undefined} isLoading={weatherLoading} temperatureUnit={temperatureUnit} t={t} />
 
           {/* Main selection card */}
           <Card>

@@ -13,10 +13,10 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('next-auth/react', () => ({
-  useSession: () => ({
+  useSession: vi.fn(() => ({
     data: null,
     status: 'unauthenticated',
-  }),
+  })),
   signIn: vi.fn(),
   signOut: vi.fn(),
   SessionProvider: ({ children }: { children: React.ReactNode }) => children,

@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
-import { api, setAccessToken } from '@/lib/api';
+import { api, ApiError, setAccessToken } from '@/lib/api';
 
 function useSetTokenIfAvailable() {
   const { data: session } = useSession();
@@ -31,7 +31,14 @@ export function useWeather() {
 
   return useQuery({
     queryKey: ['weather'],
-    queryFn: () => api.get<Weather>('/weather/current'),
+    queryFn: async (): Promise<Weather | null> => {
+      try {
+        return await api.get<Weather>('/weather/current');
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 400) return null;
+        throw error;
+      }
+    },
     enabled: status !== 'loading',
     staleTime: 1000 * 60 * 15, // 15 minutes - weather doesn't change that fast
     retry: false, // Don't retry if location not set
