@@ -214,7 +214,7 @@ async def create_item(
 
     do_auto_tag = settings.effective_ai_vision_enabled and not skip_ai
 
-    if do_auto_tag:
+    if do_auto_tag or settings.garment_matching_enabled:
         # Commit before enqueuing: the worker runs in another process on its own
         # connection, so a job handed over while this transaction is still open
         # dequeues against a row it cannot see.
@@ -222,22 +222,30 @@ async def create_item(
         try:
             redis = await create_pool(get_redis_settings())
             try:
-                full_image_path = f"{settings.storage_path}/{image_paths['image_path']}"
-                job = await redis.enqueue_job(
-                    "tag_item_image",
-                    str(item.id),
-                    full_image_path,
-                    _queue_name="arq:tagging",
-                )
-                item.ai_job_id = job.job_id
-                await db.commit()
-                await db.refresh(item, attribute_names=["updated_at"])
-                logger.info(f"Queued AI tagging job for item {item.id}")
+                if do_auto_tag:
+                    full_image_path = f"{settings.storage_path}/{image_paths['image_path']}"
+                    job = await redis.enqueue_job(
+                        "tag_item_image",
+                        str(item.id),
+                        full_image_path,
+                        _queue_name="arq:tagging",
+                    )
+                    item.ai_job_id = job.job_id
+                    await db.commit()
+                    await db.refresh(item, attribute_names=["updated_at"])
+                    logger.info(f"Queued AI tagging job for item {item.id}")
+                else:
+                    await redis.enqueue_job(
+                        "match_garment_identity",
+                        str(item.id),
+                        _queue_name="arq:tagging",
+                    )
+                    logger.info(f"Queued garment matching for item {item.id}")
             finally:
                 await redis.aclose()
         except Exception as e:
             logger.error(f"Failed to queue AI tagging job: {e}")
-    else:
+    if not do_auto_tag:
         item = await item_service.mark_pending(item, set_ready=True)
 
     return ItemResponse.model_validate(item)
@@ -289,7 +297,7 @@ async def bulk_create_items(
     do_auto_tag = settings.effective_ai_vision_enabled and not skip_ai
 
     redis = None
-    if do_auto_tag:
+    if do_auto_tag or settings.garment_matching_enabled:
         try:
             redis = await create_pool(get_redis_settings())
         except Exception as e:
@@ -371,26 +379,34 @@ async def bulk_create_items(
 
                 if not do_auto_tag:
                     item = await item_service.mark_pending(item, set_ready=True)
-                elif redis:
+                if redis:
                     # Commit per item before handing the job over. Batching the
                     # commit to the end of the loop leaves every row invisible to
                     # the worker for the whole upload, which strands the batch in
                     # `processing` whenever the AI is fast enough to win the race.
                     await db.commit()
                     try:
-                        full_image_path = f"{settings.storage_path}/{image_paths['image_path']}"
-                        job = await redis.enqueue_job(
-                            "tag_item_image",
-                            str(item.id),
-                            full_image_path,
-                            _queue_name="arq:tagging",
-                        )
-                        item.ai_job_id = job.job_id
-                        await db.commit()
-                        await db.refresh(item, attribute_names=["updated_at"])
-                        logger.info(f"Queued AI tagging for bulk item {item.id}")
+                        if do_auto_tag:
+                            full_image_path = f"{settings.storage_path}/{image_paths['image_path']}"
+                            job = await redis.enqueue_job(
+                                "tag_item_image",
+                                str(item.id),
+                                full_image_path,
+                                _queue_name="arq:tagging",
+                            )
+                            item.ai_job_id = job.job_id
+                            await db.commit()
+                            await db.refresh(item, attribute_names=["updated_at"])
+                            logger.info(f"Queued AI tagging for bulk item {item.id}")
+                        else:
+                            await redis.enqueue_job(
+                                "match_garment_identity",
+                                str(item.id),
+                                _queue_name="arq:tagging",
+                            )
+                            logger.info(f"Queued garment matching for bulk item {item.id}")
                     except Exception as e:
-                        logger.error(f"Failed to queue AI tagging for {item.id}: {e}")
+                        logger.error(f"Failed to queue item processing for {item.id}: {e}")
 
                 results.append(
                     BulkUploadResult(

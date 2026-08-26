@@ -11,12 +11,14 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -196,6 +198,51 @@ class DuplicateMatchCandidate(Base):
     matcher_revision: Mapped[str] = mapped_column(String(100), nullable=False)
     evidence: Mapped[dict] = mapped_column(JSONB, default=dict)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ItemImageEmbedding(Base):
+    __tablename__ = "item_image_embeddings"
+    __table_args__ = (
+        Index(
+            "uq_item_primary_embedding_version",
+            "item_id",
+            "model",
+            "model_revision",
+            "preprocess_revision",
+            unique=True,
+            postgresql_where=text("item_image_id IS NULL"),
+        ),
+        Index(
+            "uq_item_additional_embedding_version",
+            "item_image_id",
+            "model",
+            "model_revision",
+            "preprocess_revision",
+            unique=True,
+            postgresql_where=text("item_image_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("clothing_items.id", ondelete="CASCADE"), nullable=False
+    )
+    item_image_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("item_images.id", ondelete="CASCADE")
+    )
+    source_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(JSONB, nullable=False)
+    dimensions: Mapped[int] = mapped_column(Integer, nullable=False)
+    model: Mapped[str] = mapped_column(String(100), nullable=False)
+    model_revision: Mapped[str] = mapped_column(String(100), nullable=False)
+    preprocess_revision: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

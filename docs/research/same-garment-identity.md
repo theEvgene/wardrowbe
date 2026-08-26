@@ -88,6 +88,17 @@ There is no defensible universal cosine threshold. Calibrate on Wardrowbe's actu
 
 The reported blue-shorts pair must become a positive fixture. Its pHash distance of 20 establishes that stage 1 missed it; its DINO score must be measured rather than assumed. Every threshold change should carry a revision and regression tests for both false positives and false negatives.
 
+### Local calibration snapshot (2026-08-26)
+
+The confirmed front/back blue-shorts pair was measured locally with the pinned `facebook/dinov2-small` revision and slow Transformers 4.52.3 image processor. The user photos were not committed to the repository.
+
+- Confirmed positive: cosine `0.894604` (pHash Hamming distance `20`).
+- Six distinct same-type T-shirt pairs: maximum cosine `0.749401`; the other scores were `0.745989`, `0.357405`, `0.283792`, `0.198111`, and `0.143698`.
+- CPU smoke measurement: 384 dimensions, approximately `3.6–4.0 s` cold load plus first image and `0.08–0.15 s` per warm image on the development host.
+- Initial `T_review`: `0.85`. This creates a review suggestion only and remains configurable as `GARMENT_MATCHING_REVIEW_THRESHOLD`.
+
+This is a minimal calibration set, not evidence of production-level recall. The repository therefore freezes matcher-boundary vectors in tests, records model/preprocessing revisions with every vector, and must accumulate more user-confirmed positives and same-type hard negatives before changing the threshold.
+
 ## Safe canonical-item and review design
 
 ### Data model

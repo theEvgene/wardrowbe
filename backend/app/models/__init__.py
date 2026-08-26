@@ -5,6 +5,7 @@ from app.models.item import (
     DuplicateMatchStatus,
     ItemHistory,
     ItemImage,
+    ItemImageEmbedding,
     WashHistory,
 )
 from app.models.learning import (
@@ -33,6 +34,7 @@ __all__ = [
     "ClothingItem",
     "DuplicateMatchCandidate",
     "DuplicateMatchStatus",
+    "ItemImageEmbedding",
     "ItemHistory",
     "ItemImage",
     "WashHistory",

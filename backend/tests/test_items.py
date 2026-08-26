@@ -277,15 +277,11 @@ class TestItemService:
         service = ItemService(db_session)
 
         assert (
-            await service.find_duplicate_by_hash(
-                test_user.id, "00000000000000ff", threshold=8
-            )
+            await service.find_duplicate_by_hash(test_user.id, "00000000000000ff", threshold=8)
             == item
         )
         assert (
-            await service.find_duplicate_by_hash(
-                test_user.id, "00000000000001ff", threshold=8
-            )
+            await service.find_duplicate_by_hash(test_user.id, "00000000000001ff", threshold=8)
             is None
         )
 
@@ -573,11 +569,37 @@ class TestBulkCreateUploadKeyIdempotency:
 
 class TestBulkCreateSkipAI:
     @pytest.mark.asyncio
-    async def test_skip_ai_marks_items_ready_without_queueing(
+    async def test_skip_ai_still_queues_review_only_garment_matching(
         self, client: AsyncClient, auth_headers
     ):
         files = [("images", ("shirt.jpg", _make_test_image_bytes(), "image/jpeg"))]
         with patch("app.api.items.create_pool", new_callable=AsyncMock) as mock_create_pool:
+            mock_redis = AsyncMock()
+            mock_create_pool.return_value = mock_redis
+            response = await client.post(
+                "/api/v1/items/bulk",
+                files=files,
+                data={"skip_ai": "true"},
+                headers=auth_headers,
+            )
+
+        assert response.status_code == 201
+        item_id = response.json()["results"][0]["item"]["id"]
+        mock_redis.enqueue_job.assert_awaited_once_with(
+            "match_garment_identity",
+            item_id,
+            _queue_name="arq:tagging",
+        )
+
+    @pytest.mark.asyncio
+    async def test_skip_ai_marks_items_ready_without_queueing(
+        self, client: AsyncClient, auth_headers
+    ):
+        files = [("images", ("shirt.jpg", _make_test_image_bytes(), "image/jpeg"))]
+        with (
+            patch("app.api.items.create_pool", new_callable=AsyncMock) as mock_create_pool,
+            patch("app.api.items.settings.garment_matching_enabled", False),
+        ):
             mock_redis = AsyncMock()
             mock_create_pool.return_value = mock_redis
             response = await client.post(
@@ -631,6 +653,29 @@ class TestBulkCreateSkipAI:
         item_id = UUID(response.json()["results"][0]["item"]["id"])
         result = await db_session.execute(select(ClothingItem).where(ClothingItem.id == item_id))
         assert result.scalar_one().ai_job_id == "fake-job-id"
+
+
+class TestSingleCreateGarmentMatching:
+    @pytest.mark.asyncio
+    async def test_skip_ai_queues_review_only_garment_matching(
+        self, client: AsyncClient, auth_headers
+    ):
+        with patch("app.api.items.create_pool", new_callable=AsyncMock) as mock_create_pool:
+            mock_redis = AsyncMock()
+            mock_create_pool.return_value = mock_redis
+            response = await client.post(
+                "/api/v1/items",
+                files={"image": ("shirt.jpg", _make_test_image_bytes(), "image/jpeg")},
+                data={"skip_ai": "true"},
+                headers=auth_headers,
+            )
+
+        assert response.status_code == 201, response.text
+        mock_redis.enqueue_job.assert_awaited_once_with(
+            "match_garment_identity",
+            response.json()["id"],
+            _queue_name="arq:tagging",
+        )
 
 
 class TestCancelAnalysis:

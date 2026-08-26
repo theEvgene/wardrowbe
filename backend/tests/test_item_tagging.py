@@ -71,7 +71,10 @@ class TestCreateGating:
 
     @pytest.mark.asyncio
     async def test_skip_ai_marks_ready_and_pending(self, client: AsyncClient, auth_headers):
-        with patch("app.api.items.create_pool", new_callable=AsyncMock) as mock_create_pool:
+        with (
+            patch("app.api.items.create_pool", new_callable=AsyncMock) as mock_create_pool,
+            patch("app.api.items.settings.garment_matching_enabled", False),
+        ):
             mock_redis = AsyncMock()
             mock_create_pool.return_value = mock_redis
             response = await client.post(
@@ -91,7 +94,10 @@ class TestCreateGating:
     async def test_vision_disabled_marks_ready_and_pending(
         self, client: AsyncClient, auth_headers, monkeypatch
     ):
-        monkeypatch.setattr("app.api.items.settings", Settings(ai_vision_enabled=False))
+        monkeypatch.setattr(
+            "app.api.items.settings",
+            Settings(ai_vision_enabled=False, garment_matching_enabled=False),
+        )
         with patch("app.api.items.create_pool", new_callable=AsyncMock) as mock_create_pool:
             response = await client.post(
                 "/api/v1/items",
@@ -112,7 +118,10 @@ class TestBulkCreateGating:
         self, client: AsyncClient, auth_headers
     ):
         files = [("images", ("shirt.jpg", _make_test_image_bytes(), "image/jpeg"))]
-        with patch("app.api.items.create_pool", new_callable=AsyncMock) as mock_create_pool:
+        with (
+            patch("app.api.items.create_pool", new_callable=AsyncMock) as mock_create_pool,
+            patch("app.api.items.settings.garment_matching_enabled", False),
+        ):
             response = await client.post(
                 "/api/v1/items/bulk",
                 files=files,
@@ -130,7 +139,10 @@ class TestBulkCreateGating:
     async def test_vision_disabled_marks_ready_and_pending_without_pool(
         self, client: AsyncClient, auth_headers, monkeypatch
     ):
-        monkeypatch.setattr("app.api.items.settings", Settings(ai_vision_enabled=False))
+        monkeypatch.setattr(
+            "app.api.items.settings",
+            Settings(ai_vision_enabled=False, garment_matching_enabled=False),
+        )
         files = [("images", ("shirt.jpg", _make_test_image_bytes(), "image/jpeg"))]
         with patch("app.api.items.create_pool", new_callable=AsyncMock) as mock_create_pool:
             response = await client.post(
@@ -458,12 +470,13 @@ class TestWorkerTaggingOrigin:
                 return stub_tags
 
         monkeypatch.setattr(tagging, "AIService", _StubAI)
+        mock_redis = AsyncMock()
 
         with (
             patch("app.workers.tagging.get_db_session", return_value=db_session),
             patch.object(db_session, "close", new_callable=AsyncMock),
         ):
-            result = await tagging.tag_item_image({}, str(item.id), __file__)
+            result = await tagging.tag_item_image({"redis": mock_redis}, str(item.id), __file__)
 
         assert result["status"] == "success"
         refreshed = await _get_item(db_session, item.id)
@@ -471,6 +484,11 @@ class TestWorkerTaggingOrigin:
         assert refreshed.tagged_by == TaggedBy.auto
         assert refreshed.tagged_at is not None
         assert refreshed.status == ItemStatus.ready
+        mock_redis.enqueue_job.assert_awaited_once_with(
+            "match_garment_identity",
+            str(item.id),
+            _queue_name="arq:tagging",
+        )
 
     @pytest.mark.asyncio
     async def test_manual_origin_survives_late_worker_completion(

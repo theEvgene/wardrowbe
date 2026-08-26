@@ -68,6 +68,11 @@ class Settings(BaseSettings):
     # retry is never permitted inside a spacing window arq already exhausted.
     ai_retry_cooldown_seconds: int = Field(default=120, ge=0)
 
+    # Review-only same-garment matching. The threshold creates a pending
+    # suggestion only; no score can auto-merge wardrobe records.
+    garment_matching_enabled: bool = Field(default=True)
+    garment_matching_review_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
+
     # Weather
     openmeteo_url: str = Field(default="https://api.open-meteo.com/v1")
     geocoding_user_agent: str | None = Field(default=None)

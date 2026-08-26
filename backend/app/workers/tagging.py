@@ -297,6 +297,20 @@ async def tag_item_image(ctx: dict, item_id: str, image_path: str) -> dict[str, 
             await db.commit()
             logger.info(f"Updated item {item_id} with AI tags (status=ready)")
 
+            if get_settings().garment_matching_enabled:
+                redis = ctx.get("redis")
+                if redis is None:
+                    logger.warning("Garment matching not queued for %s: Redis unavailable", item_id)
+                else:
+                    try:
+                        await redis.enqueue_job(
+                            "match_garment_identity",
+                            item_id,
+                            _queue_name="arq:tagging",
+                        )
+                    except Exception:
+                        logger.exception("Failed to queue garment matching for %s", item_id)
+
             return {
                 "status": "success",
                 "item_id": item_id,

@@ -351,6 +351,8 @@ See the [k8s/](k8s/) directory for Kubernetes manifests including:
 | `BG_REMOVAL_MODEL` | rembg model name (default: `u2net`) | No |
 | `BG_REMOVAL_URL` | URL for HTTP bg removal provider | If http |
 | `BG_REMOVAL_API_KEY` | API key for HTTP bg removal provider | No |
+| `GARMENT_MATCHING_ENABLED` | Enable local DINOv2 review suggestions for likely photos of the same garment (default: `true`) | No |
+| `GARMENT_MATCHING_REVIEW_THRESHOLD` | Cosine threshold for creating a review suggestion; never auto-merges (default: `0.85`) | No |
 | `NEXT_PUBLIC_ENABLE_IP_LOCATION_FALLBACK` | Enable IP-based approximate location when browser geolocation is denied/unavailable. Off by default (sends the user's IP to a third party). Set to `true` to enable | No |
 | `NEXT_PUBLIC_NETWORK_LOCATION_URL` | Override the IP geolocation provider (default: `https://ipapi.co/json/`). Only used when the fallback above is enabled | No |
 
