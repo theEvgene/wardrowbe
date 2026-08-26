@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.database import get_db
 from app.services.ai_service import get_ai_service
+from app.services.garment_extraction_metrics import garment_extraction_metrics
 
 router = APIRouter()
 
@@ -14,6 +15,13 @@ router = APIRouter()
 @router.get("/health")
 async def health_check() -> dict[str, str]:
     return {"status": "healthy"}
+
+
+@router.get("/health/metrics/garment-extraction")
+async def garment_extraction_metrics_snapshot() -> dict[str, Any]:
+    """Expose anonymous process-local performance and mask-quality aggregates."""
+
+    return garment_extraction_metrics.snapshot()
 
 
 @router.get("/capabilities")

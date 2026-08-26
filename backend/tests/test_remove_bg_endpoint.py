@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.item import ClothingItem, ItemStatus
 from app.models.user import User
 from app.schemas.item import RemoveBackgroundRequest
+from app.services.background_removal import BackgroundRemovalResult
 from app.services.image_service import ImageService
 
 
@@ -53,6 +54,10 @@ class TestRemoveBackgroundEndpoint:
         auth_headers: dict[str, str],
         db_session: AsyncSession,
     ) -> None:
+        before_response = await client.get("/api/v1/health/metrics/garment-extraction")
+        assert before_response.status_code == 200
+        before = before_response.json()
+
         image_bytes = BytesIO()
         Image.new("RGB", (100, 100), (30, 60, 90)).save(image_bytes, format="JPEG")
         paths = await ImageService().process_and_store(
@@ -90,6 +95,74 @@ class TestRemoveBackgroundEndpoint:
         persisted = await client.get(f"/api/v1/items/{item.id}", headers=auth_headers)
         assert persisted.status_code == 200
         assert persisted.json()["background_removal"]["outcome"] == "unsupported"
+
+        after_response = await client.get("/api/v1/health/metrics/garment-extraction")
+        assert after_response.status_code == 200
+        after = after_response.json()
+        assert after["total_requests"] == before["total_requests"] + 1
+        assert after["outcomes"]["unsupported"] == before["outcomes"]["unsupported"] + 1
+        assert after["latency_ms"]["last"] >= 0
+        assert after["window_size"] <= after["window_capacity"]
+        assert "item_id" not in after
+        assert "user_id" not in after
+
+    @pytest.mark.asyncio
+    async def test_accepted_garment_updates_latency_and_quality_metrics(
+        self,
+        client: AsyncClient,
+        test_user: User,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+    ) -> None:
+        before = (await client.get("/api/v1/health/metrics/garment-extraction")).json()
+        image_bytes = BytesIO()
+        Image.new("RGB", (100, 100), (30, 60, 90)).save(image_bytes, format="JPEG")
+        paths = await ImageService().process_and_store(
+            test_user.id,
+            image_bytes.getvalue(),
+            "shirt.jpg",
+        )
+        item = ClothingItem(
+            user_id=test_user.id,
+            type="shirt",
+            image_path=paths["image_path"],
+            medium_path=paths["medium_path"],
+            thumbnail_path=paths["thumbnail_path"],
+            image_hash=paths["image_hash"],
+            status=ItemStatus.ready,
+        )
+        db_session.add(item)
+        await db_session.commit()
+        await db_session.refresh(item)
+        provider = MagicMock()
+        provider.remove.return_value = BackgroundRemovalResult(
+            outcome="accepted",
+            mode="garment",
+            image=Image.new("RGBA", (100, 100), (255, 0, 0, 255)),
+            provider="rembg",
+            model="u2net_cloth_seg",
+            garment_category="upper",
+            metrics={"mask_area_ratio": 0.4, "largest_component_ratio": 0.95},
+        )
+
+        with patch("app.services.background_removal.get_provider", return_value=provider):
+            response = await client.post(
+                f"/api/v1/items/{item.id}/remove-background",
+                json={"mode": "garment"},
+                headers=auth_headers,
+            )
+
+        assert response.status_code == 200
+        request_metrics = response.json()["background_removal"]["metrics"]
+        assert request_metrics["duration_ms"] >= 0
+        after = (await client.get("/api/v1/health/metrics/garment-extraction")).json()
+        assert after["total_requests"] == before["total_requests"] + 1
+        assert after["outcomes"]["accepted"] == before["outcomes"]["accepted"] + 1
+        assert after["garment_categories"]["upper"] == (
+            before["garment_categories"].get("upper", 0) + 1
+        )
+        assert after["quality"]["samples"] == before["quality"]["samples"] + 1
+        assert after["quality"]["average_mask_area_ratio"] is not None
 
     @pytest.mark.asyncio
     async def test_rejected_retry_preserves_active_background_state(

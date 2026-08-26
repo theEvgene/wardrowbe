@@ -4,12 +4,14 @@ import uuid
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
+from time import perf_counter
 
 import imagehash
 from PIL import Image, ImageOps
 
 from app.config import get_settings
 from app.services import background_removal
+from app.services.garment_extraction_metrics import garment_extraction_metrics
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -281,6 +283,27 @@ class ImageService:
     ) -> dict[str, object]:
         """Remove a scene background or isolate a garment while preserving undo state."""
 
+        started_at = perf_counter()
+
+        def finish(result: dict[str, object]) -> dict[str, object]:
+            if mode != "garment":
+                return result
+            duration_ms = (perf_counter() - started_at) * 1000
+            request_metrics = dict(result.get("metrics") or {})
+            request_metrics["duration_ms"] = duration_ms
+            result["metrics"] = request_metrics
+            garment_extraction_metrics.record(
+                outcome=str(result.get("outcome", "failed")),
+                garment_category=(
+                    str(result["garment_category"])
+                    if result.get("garment_category") is not None
+                    else None
+                ),
+                duration_ms=duration_ms,
+                quality=request_metrics,
+            )
+            return result
+
         base_path = image_path.rsplit(".", 1)[0]
         original_full = self.storage_path / image_path
 
@@ -291,11 +314,13 @@ class ImageService:
         if mode == "garment":
             garment_category = background_removal.garment_category_for_item_type(item_type or "")
             if garment_category is None:
-                return {
-                    "outcome": "unsupported",
-                    "mode": mode,
-                    "warning": f"Garment extraction is not supported for item type: {item_type}",
-                }
+                return finish(
+                    {
+                        "outcome": "unsupported",
+                        "mode": mode,
+                        "warning": f"Garment extraction is not supported for item type: {item_type}",
+                    }
+                )
 
         image = Image.open(original_full).convert("RGB")
         provider = background_removal.get_provider()
@@ -310,15 +335,17 @@ class ImageService:
                 provider_result = provider.remove(image)
         except Exception as exc:
             logger.exception("Background removal provider failed")
-            return {
-                "outcome": "failed",
-                "mode": mode,
-                "provider": provider.__class__.__name__,
-                "model": getattr(provider, "model", None),
-                "garment_category": garment_category,
-                "warning": str(exc),
-                "metrics": {},
-            }
+            return finish(
+                {
+                    "outcome": "failed",
+                    "mode": mode,
+                    "provider": provider.__class__.__name__,
+                    "model": getattr(provider, "model", None),
+                    "garment_category": garment_category,
+                    "warning": str(exc),
+                    "metrics": {},
+                }
+            )
 
         processing_metadata: dict[str, object] = {"outcome": "accepted", "mode": mode}
         if isinstance(provider_result, background_removal.BackgroundRemovalResult):
@@ -334,7 +361,7 @@ class ImageService:
                 }
             )
             if provider_result.outcome != "accepted" or provider_result.image is None:
-                return processing_metadata
+                return finish(processing_metadata)
             result = provider_result.image
         else:
             result = provider_result
@@ -364,7 +391,7 @@ class ImageService:
         paths: dict[str, object] = self._save_all_sizes(final, image_path)
         paths["original_backup_path"] = backup_path
         paths.update(processing_metadata)
-        return paths
+        return finish(paths)
 
     def restore_original(self, image_path: str, backup_path: str) -> dict[str, str]:
         backup_full = self.storage_path / backup_path
