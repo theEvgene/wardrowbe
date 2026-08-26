@@ -94,6 +94,7 @@ class RecommendationService:
                 ClothingItem.user_id == user.id,
                 ClothingItem.status == ItemStatus.ready,
                 ClothingItem.is_archived.is_(False),
+                ClothingItem.canonical_item_id.is_(None),
             )
         )
 
@@ -323,11 +324,11 @@ class RecommendationService:
             if preferences.style_profile:
                 profile = preferences.style_profile
                 strong = sorted(
-                    [(k, v) for k, v in profile.items() if isinstance(v, (int, float)) and v > 60],
+                    [(k, v) for k, v in profile.items() if isinstance(v, int | float) and v > 60],
                     key=lambda x: x[1],
                     reverse=True,
                 )
-                weak = [k for k, v in profile.items() if isinstance(v, (int, float)) and v < 30]
+                weak = [k for k, v in profile.items() if isinstance(v, int | float) and v < 30]
                 if strong:
                     desc = ", ".join(f"{k} ({v}%)" for k, v in strong)
                     lines.append(f"- Preferred styles: {desc}")
@@ -719,6 +720,7 @@ class RecommendationService:
                             ClothingItem.user_id == user.id,
                             ClothingItem.status == ItemStatus.ready,
                             ClothingItem.is_archived.is_(False),
+                            ClothingItem.canonical_item_id.is_(None),
                         )
                     )
                 )

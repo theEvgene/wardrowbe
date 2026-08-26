@@ -26,6 +26,7 @@ from app.schemas.item import (
     BulkUploadResult,
     ItemCreate,
     ItemFilter,
+    ItemGalleryImageResponse,
     ItemImageResponse,
     ItemListResponse,
     ItemResponse,
@@ -67,6 +68,41 @@ def _has_tag_content(field: str, value: Any) -> bool:
     if field == "tags" and isinstance(value, dict):
         return any(v not in _EMPTY_TAG_VALUES for v in value.values())
     return value not in _EMPTY_TAG_VALUES
+
+
+async def _item_response_with_gallery(
+    item: ClothingItem, item_service: ItemService
+) -> ItemResponse:
+    response = ItemResponse.model_validate(item)
+    group = await item_service.get_canonical_group(item)
+    response.gallery_images = [
+        ItemGalleryImageResponse(
+            id=group_item.id,
+            source_item_id=group_item.id,
+            image_path=group_item.image_path,
+            thumbnail_path=group_item.thumbnail_path,
+            medium_path=group_item.medium_path,
+            is_primary=True,
+            position=0,
+            created_at=group_item.created_at,
+        )
+        for group_item in group
+    ]
+    response.gallery_images.extend(
+        ItemGalleryImageResponse(
+            id=image.id,
+            source_item_id=group_item.id,
+            image_path=image.image_path,
+            thumbnail_path=image.thumbnail_path,
+            medium_path=image.medium_path,
+            is_primary=False,
+            position=image.position + 1,
+            created_at=image.created_at,
+        )
+        for group_item in group
+        for image in group_item.additional_images
+    )
+    return response
 
 
 def _background_removal_metadata(result: dict[str, object]) -> dict[str, object]:
@@ -248,7 +284,7 @@ async def create_item(
     if not do_auto_tag:
         item = await item_service.mark_pending(item, set_ready=True)
 
-    return ItemResponse.model_validate(item)
+    return await _item_response_with_gallery(item, item_service)
 
 
 @router.post("/bulk", response_model=BulkUploadResponse, status_code=status.HTTP_201_CREATED)
@@ -726,7 +762,11 @@ async def get_tagging_progress(
     # separate queries could under concurrent worker commits.
     result = await db.execute(
         select(ClothingItem.status, ClothingItem.ai_started_at.is_(None), func.count())
-        .where(ClothingItem.user_id == current_user.id, ClothingItem.is_archived.is_(False))
+        .where(
+            ClothingItem.user_id == current_user.id,
+            ClothingItem.is_archived.is_(False),
+            ClothingItem.canonical_item_id.is_(None),
+        )
         .group_by(ClothingItem.status, ClothingItem.ai_started_at.is_(None))
     )
     queued = 0
@@ -769,7 +809,7 @@ async def get_item(
             detail="Item not found",
         )
 
-    return ItemResponse.model_validate(item)
+    return await _item_response_with_gallery(item, item_service)
 
 
 @router.patch("/{item_id}", response_model=ItemResponse)
@@ -926,10 +966,12 @@ async def get_item_history(
             detail="Item not found",
         )
 
+    item_ids = await item_service.get_canonical_group_ids(item)
+
     # Eagerly load outfit and its items for context
     result = await db.execute(
         sa_select(ItemHistory)
-        .where(ItemHistory.item_id == item_id)
+        .where(ItemHistory.item_id.in_(item_ids))
         .options(
             selectinload(ItemHistory.outfit)
             .selectinload(Outfit.items)
@@ -1048,7 +1090,7 @@ async def get_item_wash_history(
             detail="Item not found",
         )
 
-    history = await item_service.get_wash_history(item_id, limit)
+    history = await item_service.get_wash_history(item, limit)
     return [WashHistoryResponse.model_validate(h) for h in history]
 
 

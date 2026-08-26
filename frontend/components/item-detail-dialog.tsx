@@ -441,10 +441,12 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
             <div className="space-y-2">
               <div className="relative aspect-square bg-muted rounded-lg overflow-hidden">
                 {(() => {
-                  const allImages = [
-                    { url: `${imageUrl}&v=${imageKey}`, id: 'primary' },
-                    ...(item.additional_images || []).map((img) => ({ url: img.image_url, id: img.id })),
-                  ];
+                  const allImages = !isEditing && item.gallery_images?.length
+                    ? item.gallery_images.map((img) => ({ url: img.image_url, id: img.id }))
+                    : [
+                        { url: `${imageUrl}&v=${imageKey}`, id: 'primary' },
+                        ...(item.additional_images || []).map((img) => ({ url: img.image_url, id: img.id })),
+                      ];
                   const currentImage = allImages[activeImageIndex] || allImages[0];
                   return (
                     <>

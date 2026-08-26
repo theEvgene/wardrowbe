@@ -23,6 +23,28 @@ class ItemService:
         )
         return result.scalar_one_or_none()
 
+    async def get_canonical_group(self, item: ClothingItem) -> list[ClothingItem]:
+        """Return the canonical item and all aliases without rewriting source records."""
+        canonical_id = item.canonical_item_id or item.id
+        result = await self.db.execute(
+            select(ClothingItem)
+            .where(
+                and_(
+                    ClothingItem.user_id == item.user_id,
+                    or_(
+                        ClothingItem.id == canonical_id,
+                        ClothingItem.canonical_item_id == canonical_id,
+                    ),
+                )
+            )
+            .options(selectinload(ClothingItem.additional_images))
+        )
+        items = list(result.scalars().all())
+        return sorted(items, key=lambda group_item: group_item.id != canonical_id)
+
+    async def get_canonical_group_ids(self, item: ClothingItem) -> list[UUID]:
+        return [group_item.id for group_item in await self.get_canonical_group(item)]
+
     async def get_ready_item_count(self, user_id: UUID) -> int:
         result = await self.db.execute(
             select(func.count())
@@ -32,6 +54,7 @@ class ItemService:
                     ClothingItem.user_id == user_id,
                     ClothingItem.status == ItemStatus.ready,
                     ClothingItem.is_archived.is_(False),
+                    ClothingItem.canonical_item_id.is_(None),
                 )
             )
         )
@@ -67,6 +90,7 @@ class ItemService:
 
         # Archive filter
         query = query.where(ClothingItem.is_archived == filters.is_archived)
+        query = query.where(ClothingItem.canonical_item_id.is_(None))
 
         # Needs wash filter
         if filters.needs_wash is not None:
@@ -123,6 +147,7 @@ class ItemService:
             query = query.where(ClothingItem.type == type_filter)
 
         query = query.where(ClothingItem.is_archived == is_archived)
+        query = query.where(ClothingItem.canonical_item_id.is_(None))
 
         if search:
             search_term = f"%{search}%"
@@ -165,6 +190,7 @@ class ItemService:
                     ClothingItem.user_id == user_id,
                     ClothingItem.image_hash.is_not(None),
                     ClothingItem.is_archived.is_(False),
+                    ClothingItem.canonical_item_id.is_(None),
                 )
             )
         )
@@ -488,12 +514,13 @@ class ItemService:
 
     async def get_wash_history(
         self,
-        item_id: UUID,
+        item: ClothingItem,
         limit: int = 10,
     ) -> list[WashHistory]:
+        item_ids = await self.get_canonical_group_ids(item)
         result = await self.db.execute(
             select(WashHistory)
-            .where(WashHistory.item_id == item_id)
+            .where(WashHistory.item_id.in_(item_ids))
             .order_by(WashHistory.washed_at.desc())
             .limit(limit)
         )
@@ -501,12 +528,13 @@ class ItemService:
 
     async def get_wear_history(
         self,
-        item_id: UUID,
+        item: ClothingItem,
         limit: int = 10,
     ) -> list[ItemHistory]:
+        item_ids = await self.get_canonical_group_ids(item)
         result = await self.db.execute(
             select(ItemHistory)
-            .where(ItemHistory.item_id == item_id)
+            .where(ItemHistory.item_id.in_(item_ids))
             .order_by(ItemHistory.worn_at.desc())
             .limit(limit)
         )
@@ -520,15 +548,22 @@ class ItemService:
             user_tz = ZoneInfo("UTC")
         user_today = datetime.now(UTC).astimezone(user_tz).date()
 
+        group = await self.get_canonical_group(item)
+        item_ids = [group_item.id for group_item in group]
+        last_worn_at = max(
+            (group_item.last_worn_at for group_item in group if group_item.last_worn_at),
+            default=None,
+        )
+
         # Days since last worn
         days_since_last_worn = None
-        if item.last_worn_at:
-            days_since_last_worn = (user_today - item.last_worn_at).days
+        if last_worn_at:
+            days_since_last_worn = (user_today - last_worn_at).days
 
         # Get all wear history for this item
         result = await self.db.execute(
             select(ItemHistory)
-            .where(ItemHistory.item_id == item.id)
+            .where(ItemHistory.item_id.in_(item_ids))
             .order_by(ItemHistory.worn_at.desc())
         )
         history = list(result.scalars().all())
@@ -560,7 +595,7 @@ class ItemService:
         most_common_occasion = Counter(occasions).most_common(1)[0][0] if occasions else None
 
         return {
-            "total_wears": item.wear_count,
+            "total_wears": sum(group_item.wear_count for group_item in group),
             "days_since_last_worn": days_since_last_worn,
             "average_wears_per_month": avg_per_month,
             "wear_by_month": wear_by_month,
@@ -575,6 +610,7 @@ class ItemService:
                 and_(
                     ClothingItem.user_id == user_id,
                     ClothingItem.is_archived == False,  # noqa: E712
+                    ClothingItem.canonical_item_id.is_(None),
                 )
             )
             .group_by(ClothingItem.type)
@@ -592,6 +628,7 @@ class ItemService:
                 and_(
                     ClothingItem.user_id == user_id,
                     ClothingItem.is_archived == False,  # noqa: E712
+                    ClothingItem.canonical_item_id.is_(None),
                 )
             )
             .group_by("color")

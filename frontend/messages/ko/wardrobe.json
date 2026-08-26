@@ -79,6 +79,18 @@
     "confirmTitleAll": "{count, plural, other {아이템 #개 전체를 삭제하시겠어요?}}"
   },
   "clearFilters": "필터 초기화",
+  "duplicateReview": {
+    "description": "같은 실제 의류를 찍은 사진일 수 있습니다. 기본 기록을 선택해 병합하거나 별도로 유지하세요.",
+    "error": "중복 결정을 저장하지 못했습니다",
+    "keepSeparate": "별도로 유지",
+    "keptSeparate": "항목이 별도로 유지됩니다",
+    "merge": "병합",
+    "merged": "항목을 병합했습니다",
+    "primary": "기본",
+    "remaining": "검토할 항목 {count}개",
+    "similarity": "시각적 유사도: {percent}%",
+    "title": "중복 가능성"
+  },
   "colorEyedropper": {
     "buttonTitle": "이미지에서 색상 추출",
     "description": "이미지 아무 곳이나 클릭하여 색상을 추출하세요",

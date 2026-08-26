@@ -79,6 +79,18 @@
     "confirmTitleAll": "刪除全部 {count, plural, one {# 件單品} other {# 件單品}}？"
   },
   "clearFilters": "清除篩選",
+  "duplicateReview": {
+    "description": "這些照片可能是同一件衣物。請選擇要保留為主要記錄的項目並合併，或保持分開。",
+    "error": "無法儲存重複項目決定",
+    "keepSeparate": "保持分開",
+    "keptSeparate": "這些衣物將保持分開",
+    "merge": "合併",
+    "merged": "衣物已合併",
+    "primary": "主要記錄",
+    "remaining": "還有 {count} 項待檢查",
+    "similarity": "視覺相似度：{percent}%",
+    "title": "可能重複"
+  },
   "colorEyedropper": {
     "buttonTitle": "從圖片取色",
     "description": "點擊圖片任意位置取色",

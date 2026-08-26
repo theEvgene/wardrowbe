@@ -79,6 +79,18 @@
     "confirmTitleAll": "Alle {count, plural, one {# Stück} other {# Stücke}} löschen?"
   },
   "clearFilters": "Filter zurücksetzen",
+  "duplicateReview": {
+    "description": "Diese Fotos könnten dasselbe Kleidungsstück zeigen. Wähle den primären Eintrag und führe sie zusammen oder behalte sie getrennt.",
+    "error": "Die Entscheidung konnte nicht gespeichert werden",
+    "keepSeparate": "Getrennt behalten",
+    "keptSeparate": "Die Einträge bleiben getrennt",
+    "merge": "Zusammenführen",
+    "merged": "Die Einträge wurden zusammengeführt",
+    "primary": "Primär",
+    "remaining": "{count} zu prüfen",
+    "similarity": "Visuelle Ähnlichkeit: {percent}%",
+    "title": "Mögliches Duplikat"
+  },
   "colorEyedropper": {
     "buttonTitle": "Farbe aus Bild wählen",
     "description": "Klicke auf das Bild, um eine Farbe auszuwählen",

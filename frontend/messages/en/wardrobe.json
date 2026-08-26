@@ -79,6 +79,18 @@
     "confirmTitleAll": "Delete all {count, plural, one {# item} other {# items}}?"
   },
   "clearFilters": "Clear filters",
+  "duplicateReview": {
+    "description": "These photos may show the same physical garment. Select the record to keep as primary, then merge them, or keep them separate.",
+    "error": "Could not save the duplicate decision",
+    "keepSeparate": "Keep separate",
+    "keptSeparate": "The items will remain separate",
+    "merge": "Merge",
+    "merged": "The items were merged",
+    "primary": "Primary",
+    "remaining": "{count} to review",
+    "similarity": "Visual similarity: {percent}%",
+    "title": "Possible duplicate"
+  },
   "colorEyedropper": {
     "buttonTitle": "Pick color from image",
     "description": "Click anywhere on the image to sample a color",

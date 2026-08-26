@@ -57,12 +57,54 @@ export interface Item {
   needs_wash: boolean;
   effective_wash_interval: number;
   additional_images: ItemImage[];
+  gallery_images?: ItemGalleryImage[];
   is_archived: boolean;
   archived_at?: string;
   archive_reason?: string;
   created_at: string;
   updated_at: string;
   background_removal?: BackgroundRemovalMetadata | null;
+}
+
+export interface ItemGalleryImage {
+  id: string;
+  source_item_id: string;
+  image_path: string;
+  thumbnail_path?: string;
+  medium_path?: string;
+  is_primary: boolean;
+  position: number;
+  created_at: string;
+  image_url: string;
+  thumbnail_url?: string;
+  medium_url?: string;
+}
+
+export interface DuplicateMatchItem {
+  id: string;
+  type: string;
+  name?: string;
+  image_path: string;
+  thumbnail_path?: string;
+  image_url: string;
+  thumbnail_url?: string;
+  created_at: string;
+}
+
+export interface DuplicateMatch {
+  id: string;
+  item_low_id: string;
+  item_high_id: string;
+  status: 'pending' | 'merged' | 'kept_separate';
+  canonical_item_id: string | null;
+  cosine_score: number | null;
+  matcher_revision: string;
+  evidence: Record<string, unknown>;
+  decided_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  item_low: DuplicateMatchItem;
+  item_high: DuplicateMatchItem;
 }
 
 export interface BackgroundRemovalMetadata {

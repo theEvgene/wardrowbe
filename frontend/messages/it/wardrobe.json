@@ -79,6 +79,18 @@
     "confirmTitleAll": "{count, plural, one {Eliminare # capo?} other {Eliminare tutti i capi (#)?}}"
   },
   "clearFilters": "Cancella filtri",
+  "duplicateReview": {
+    "description": "Queste foto potrebbero mostrare lo stesso capo. Seleziona la scheda principale e uniscile, oppure mantienile separate.",
+    "error": "Impossibile salvare la decisione",
+    "keepSeparate": "Mantieni separati",
+    "keptSeparate": "Gli articoli resteranno separati",
+    "merge": "Unisci",
+    "merged": "Gli articoli sono stati uniti",
+    "primary": "Principale",
+    "remaining": "{count} da verificare",
+    "similarity": "Somiglianza visiva: {percent}%",
+    "title": "Possibile duplicato"
+  },
   "colorEyedropper": {
     "buttonTitle": "Scegli colore dall'immagine",
     "description": "Clicca ovunque sull'immagine per campionare un colore",

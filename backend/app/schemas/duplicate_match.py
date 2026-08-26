@@ -3,7 +3,9 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, computed_field, model_validator
+
+from app.utils.signed_urls import sign_image_url
 
 
 class DuplicateMatchDecisionRequest(BaseModel):
@@ -33,3 +35,29 @@ class DuplicateMatchResponse(BaseModel):
     decided_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class DuplicateMatchReviewItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    type: str
+    name: str | None = None
+    image_path: str
+    thumbnail_path: str | None = None
+    created_at: datetime
+
+    @computed_field
+    @property
+    def image_url(self) -> str:
+        return sign_image_url(self.image_path)
+
+    @computed_field
+    @property
+    def thumbnail_url(self) -> str | None:
+        return sign_image_url(self.thumbnail_path) if self.thumbnail_path else None
+
+
+class DuplicateMatchReviewResponse(DuplicateMatchResponse):
+    item_low: DuplicateMatchReviewItem
+    item_high: DuplicateMatchReviewItem

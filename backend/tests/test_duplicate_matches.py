@@ -1,3 +1,4 @@
+from datetime import UTC, date, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -10,11 +11,19 @@ from app.models.item import (
     ClothingItem,
     DuplicateMatchCandidate,
     DuplicateMatchStatus,
+    ItemHistory,
+    ItemImage,
     ItemImageEmbedding,
     ItemStatus,
     TaggedBy,
+    WashHistory,
 )
+from app.schemas.item import ItemFilter
 from app.services.garment_identity_service import EmbeddingResult, GarmentIdentityService
+from app.services.item_service import ItemService
+from app.services.pairing_service import PairingService
+from app.services.recommendation_service import RecommendationService
+from app.services.weather_service import WeatherData
 from app.workers.garment_identity import match_garment_identity
 
 
@@ -28,6 +37,55 @@ class FakeEmbeddingProvider:
 
     async def embed(self, image_path: Path) -> EmbeddingResult:
         return EmbeddingResult(vector=self.vectors[image_path.name])
+
+
+@pytest.mark.asyncio
+async def test_pending_match_list_includes_both_review_items(
+    client: AsyncClient,
+    test_user,
+    auth_headers,
+    db_session: AsyncSession,
+):
+    first = ClothingItem(
+        user_id=test_user.id,
+        type="shorts",
+        name="Front view",
+        image_path="test/front.jpg",
+        status=ItemStatus.ready,
+    )
+    second = ClothingItem(
+        user_id=test_user.id,
+        type="shorts",
+        name="Back view",
+        image_path="test/back.jpg",
+        status=ItemStatus.ready,
+    )
+    db_session.add_all([first, second])
+    await db_session.flush()
+    candidate = DuplicateMatchCandidate(
+        user_id=test_user.id,
+        item_low_id=min(first.id, second.id),
+        item_high_id=max(first.id, second.id),
+        status=DuplicateMatchStatus.pending,
+        cosine_score=0.8946,
+        matcher_revision="test-v1",
+        evidence={"body_role": "lower"},
+    )
+    db_session.add(candidate)
+    await db_session.commit()
+
+    response = await client.get("/api/v1/duplicate-matches", headers=auth_headers)
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["id"] == str(candidate.id)
+    assert {payload[0]["item_low"]["id"], payload[0]["item_high"]["id"]} == {
+        str(first.id),
+        str(second.id),
+    }
+    assert payload[0]["item_low"]["image_url"]
+    assert payload[0]["item_high"]["image_url"]
 
 
 @pytest.mark.asyncio
@@ -340,3 +398,154 @@ async def test_worker_job_creates_pending_candidate_with_configured_provider(
         )
     ).scalar_one()
     assert candidate.status == DuplicateMatchStatus.pending
+
+
+@pytest.mark.asyncio
+async def test_recommendation_and_pairing_queries_exclude_alias_even_if_not_archived(
+    test_user,
+    db_session: AsyncSession,
+):
+    canonical = ClothingItem(
+        user_id=test_user.id,
+        type="shirt",
+        image_path="test/canonical.jpg",
+        status=ItemStatus.ready,
+    )
+    other = ClothingItem(
+        user_id=test_user.id,
+        type="pants",
+        image_path="test/other.jpg",
+        status=ItemStatus.ready,
+    )
+    db_session.add_all([canonical, other])
+    await db_session.flush()
+    alias = ClothingItem(
+        user_id=test_user.id,
+        type="shirt",
+        image_path="test/alias.jpg",
+        status=ItemStatus.ready,
+        canonical_item_id=canonical.id,
+        is_archived=False,
+    )
+    db_session.add(alias)
+    await db_session.commit()
+
+    weather = WeatherData(
+        temperature=20,
+        feels_like=20,
+        humidity=50,
+        precipitation_chance=0,
+        precipitation_mm=0,
+        wind_speed=5,
+        condition="clear",
+        condition_code=0,
+        is_day=True,
+        uv_index=2,
+        timestamp=datetime.now(UTC),
+    )
+    recommendation_candidates = await RecommendationService(db_session).get_candidate_items(
+        user=test_user,
+        weather=weather,
+        occasion="casual",
+        preferences=None,
+        exclude_items=[],
+    )
+    pairing_service = PairingService(db_session)
+    pairing_candidates = await pairing_service.get_available_items(test_user, canonical.id)
+    item_service = ItemService(db_session)
+    listed_items, listed_total = await item_service.get_list(test_user.id, ItemFilter())
+
+    assert {item.id for item in recommendation_candidates} == {canonical.id, other.id}
+    assert {item.id for item in pairing_candidates} == {other.id}
+    assert await pairing_service.get_source_item(test_user.id, alias.id) is None
+    assert await item_service.get_ready_item_count(test_user.id) == 2
+    assert listed_total == 2
+    assert {item.id for item in listed_items} == {canonical.id, other.id}
+
+
+@pytest.mark.asyncio
+async def test_canonical_item_aggregates_merged_gallery_and_history(
+    client: AsyncClient,
+    test_user,
+    auth_headers,
+    db_session: AsyncSession,
+):
+    canonical = ClothingItem(
+        user_id=test_user.id,
+        type="shirt",
+        image_path="test/canonical-primary.jpg",
+        thumbnail_path="test/canonical-primary-thumb.jpg",
+        status=ItemStatus.ready,
+        wear_count=2,
+        last_worn_at=date(2026, 8, 20),
+    )
+    db_session.add(canonical)
+    await db_session.flush()
+    alias = ClothingItem(
+        user_id=test_user.id,
+        type="shirt",
+        image_path="test/alias-primary.jpg",
+        status=ItemStatus.ready,
+        wear_count=3,
+        last_worn_at=date(2026, 8, 22),
+        canonical_item_id=canonical.id,
+        is_archived=True,
+        archive_reason="merged_duplicate",
+    )
+    db_session.add(alias)
+    await db_session.flush()
+    db_session.add_all(
+        [
+            ItemImage(
+                item_id=canonical.id,
+                image_path="test/canonical-additional.jpg",
+                position=0,
+            ),
+            ItemImage(
+                item_id=alias.id,
+                image_path="test/alias-additional.jpg",
+                position=0,
+            ),
+            ItemHistory(item_id=canonical.id, worn_at=date(2026, 8, 20)),
+            ItemHistory(item_id=alias.id, worn_at=date(2026, 8, 22)),
+            WashHistory(item_id=canonical.id, washed_at=date(2026, 8, 10)),
+            WashHistory(item_id=alias.id, washed_at=date(2026, 8, 21)),
+        ]
+    )
+    await db_session.commit()
+
+    detail_response = await client.get(f"/api/v1/items/{canonical.id}", headers=auth_headers)
+    history_response = await client.get(
+        f"/api/v1/items/{canonical.id}/history", headers=auth_headers
+    )
+    wash_response = await client.get(
+        f"/api/v1/items/{canonical.id}/wash-history", headers=auth_headers
+    )
+    stats_response = await client.get(
+        f"/api/v1/items/{canonical.id}/wear-stats", headers=auth_headers
+    )
+
+    assert detail_response.status_code == 200, detail_response.text
+    gallery = detail_response.json()["gallery_images"]
+    assert {image["source_item_id"] for image in gallery} == {
+        str(canonical.id),
+        str(alias.id),
+    }
+    assert {image["image_path"] for image in gallery} == {
+        "test/canonical-primary.jpg",
+        "test/canonical-additional.jpg",
+        "test/alias-primary.jpg",
+        "test/alias-additional.jpg",
+    }
+    assert history_response.status_code == 200, history_response.text
+    assert [entry["worn_at"] for entry in history_response.json()] == [
+        "2026-08-22",
+        "2026-08-20",
+    ]
+    assert wash_response.status_code == 200, wash_response.text
+    assert [entry["washed_at"] for entry in wash_response.json()] == [
+        "2026-08-21",
+        "2026-08-10",
+    ]
+    assert stats_response.status_code == 200, stats_response.text
+    assert stats_response.json()["total_wears"] == 5

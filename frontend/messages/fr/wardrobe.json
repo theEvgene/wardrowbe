@@ -79,6 +79,18 @@
     "confirmTitleAll": "{count, plural, one {Supprimer # article ?} other {Supprimer tous les # articles ?}}"
   },
   "clearFilters": "Effacer les filtres",
+  "duplicateReview": {
+    "description": "Ces photos peuvent montrer le même vêtement. Choisissez la fiche principale puis fusionnez-les, ou conservez-les séparément.",
+    "error": "Impossible d’enregistrer la décision",
+    "keepSeparate": "Garder séparés",
+    "keptSeparate": "Les articles resteront séparés",
+    "merge": "Fusionner",
+    "merged": "Les articles ont été fusionnés",
+    "primary": "Principal",
+    "remaining": "{count} à vérifier",
+    "similarity": "Similarité visuelle : {percent}%",
+    "title": "Doublon possible"
+  },
   "colorEyedropper": {
     "buttonTitle": "Choisir une couleur depuis l'image",
     "description": "Cliquez n'importe où sur l'image pour prélever une couleur",

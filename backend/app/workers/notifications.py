@@ -359,6 +359,7 @@ async def _check_wash_reminders_inner(ctx: dict):
                 and_(
                     ClothingItem.needs_wash == True,  # noqa: E712
                     ClothingItem.is_archived == False,  # noqa: E712
+                    ClothingItem.canonical_item_id.is_(None),
                 )
             )
         )

@@ -79,6 +79,18 @@
     "confirmTitleAll": "すべての{count, plural, one {# 件のアイテム} other {# 件のアイテム}}を削除しますか？"
   },
   "clearFilters": "フィルターをクリア",
+  "duplicateReview": {
+    "description": "同じ衣類を写した写真の可能性があります。メインにする記録を選んで統合するか、別々のままにしてください。",
+    "error": "重複の判断を保存できませんでした",
+    "keepSeparate": "別々にする",
+    "keptSeparate": "アイテムは別々のままです",
+    "merge": "統合",
+    "merged": "アイテムを統合しました",
+    "primary": "メイン",
+    "remaining": "確認待ち {count} 件",
+    "similarity": "画像の類似度: {percent}%",
+    "title": "重複の可能性"
+  },
   "colorEyedropper": {
     "buttonTitle": "画像から色を選択",
     "description": "画像の任意の場所をクリックして色を取得",

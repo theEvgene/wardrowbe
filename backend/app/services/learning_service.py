@@ -849,6 +849,7 @@ class LearningService:
                 and_(
                     ClothingItem.id.in_(paired_ids),
                     ClothingItem.is_archived.is_(False),
+                    ClothingItem.canonical_item_id.is_(None),
                 )
             )
         )

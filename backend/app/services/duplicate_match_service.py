@@ -17,6 +17,51 @@ class DuplicateMatchService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def list_pending(
+        self, user_id: UUID, limit: int = 20
+    ) -> list[tuple[DuplicateMatchCandidate, ClothingItem, ClothingItem]]:
+        candidates = list(
+            (
+                await self.db.execute(
+                    select(DuplicateMatchCandidate)
+                    .where(
+                        DuplicateMatchCandidate.user_id == user_id,
+                        DuplicateMatchCandidate.status == DuplicateMatchStatus.pending,
+                    )
+                    .order_by(DuplicateMatchCandidate.created_at.asc())
+                    .limit(limit)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not candidates:
+            return []
+
+        item_ids = {
+            item_id
+            for candidate in candidates
+            for item_id in (candidate.item_low_id, candidate.item_high_id)
+        }
+        items = list(
+            (
+                await self.db.execute(
+                    select(ClothingItem).where(
+                        ClothingItem.id.in_(item_ids),
+                        ClothingItem.user_id == user_id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        items_by_id = {item.id: item for item in items}
+        return [
+            (candidate, items_by_id[candidate.item_low_id], items_by_id[candidate.item_high_id])
+            for candidate in candidates
+            if candidate.item_low_id in items_by_id and candidate.item_high_id in items_by_id
+        ]
+
     async def decide_merge(
         self, candidate_id: UUID, user_id: UUID, canonical_item_id: UUID
     ) -> DuplicateMatchCandidate:

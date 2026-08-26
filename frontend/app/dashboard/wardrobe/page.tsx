@@ -26,6 +26,7 @@ import {
 import { AddItemDialog } from '@/components/add-item-dialog';
 import { ItemDetailDialog } from '@/components/item-detail-dialog';
 import { BulkActionToolbar, BulkSelection } from '@/components/bulk-action-toolbar';
+import { DuplicateMatchReviewQueue } from '@/components/duplicate-match-review';
 import { useItems, useItem, useItemTypes, useReanalyzeItem, useCancelAnalysis, useBulkDeleteItems, useBulkReanalyzeItems, useTaggingProgress, BulkOperationParams, tagProcessingLabel, formatAnalyzingElapsed } from '@/lib/hooks/use-items';
 import { useUserProfile } from '@/lib/hooks/use-user';
 import { Item } from '@/lib/types';
@@ -586,6 +587,8 @@ export default function WardrobePage() {
           {t('actions.addItem')}
         </Button>
       </div>
+
+      <DuplicateMatchReviewQueue />
 
       <div className="space-y-3">
         {/* Main row: search + sort + filter toggle */}

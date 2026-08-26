@@ -44,6 +44,7 @@ class PairingService:
                     ClothingItem.user_id == user_id,
                     ClothingItem.status == ItemStatus.ready,
                     ClothingItem.is_archived.is_(False),
+                    ClothingItem.canonical_item_id.is_(None),
                 )
             )
         )
@@ -55,6 +56,7 @@ class PairingService:
                 ClothingItem.user_id == user.id,
                 ClothingItem.status == ItemStatus.ready,
                 ClothingItem.is_archived.is_(False),
+                ClothingItem.canonical_item_id.is_(None),
                 ClothingItem.id != exclude_item_id,
             )
         )

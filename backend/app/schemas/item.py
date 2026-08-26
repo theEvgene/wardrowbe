@@ -84,6 +84,32 @@ class BackgroundRemovalMetadata(BaseModel):
     metrics: dict[str, float] = Field(default_factory=dict)
 
 
+class ItemGalleryImageResponse(BaseModel):
+    id: UUID
+    source_item_id: UUID
+    image_path: str
+    thumbnail_path: str | None = None
+    medium_path: str | None = None
+    is_primary: bool
+    position: int
+    created_at: datetime
+
+    @computed_field
+    @property
+    def image_url(self) -> str:
+        return sign_image_url(self.image_path)
+
+    @computed_field
+    @property
+    def thumbnail_url(self) -> str | None:
+        return sign_image_url(self.thumbnail_path) if self.thumbnail_path else None
+
+    @computed_field
+    @property
+    def medium_url(self) -> str | None:
+        return sign_image_url(self.medium_path) if self.medium_path else None
+
+
 class ItemResponse(ItemBase):
     model_config = ConfigDict(from_attributes=True)
 
@@ -140,6 +166,7 @@ class ItemResponse(ItemBase):
     wash_interval: int | None = None
     needs_wash: bool = False
     additional_images: list["ItemImageResponse"] = Field(default_factory=list)
+    gallery_images: list[ItemGalleryImageResponse] = Field(default_factory=list)
     is_archived: bool = False
     archived_at: datetime | None = None
     archive_reason: str | None = None
