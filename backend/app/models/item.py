@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     Enum,
@@ -14,6 +15,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
@@ -43,6 +45,12 @@ class TaggedBy(enum.StrEnum):
     manual = "manual"
 
 
+class DuplicateMatchStatus(enum.StrEnum):
+    pending = "pending"
+    merged = "merged"
+    kept_separate = "kept_separate"
+
+
 class ClothingItem(Base):
     __tablename__ = "clothing_items"
 
@@ -63,6 +71,12 @@ class ClothingItem(Base):
     # (migration b1c2d3e4f5a6) so a retried/duplicated upload of the same queued
     # record cannot create a second item. NULL for uploads outside that flow.
     upload_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    canonical_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("clothing_items.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
 
     # Classification
     type: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -149,6 +163,42 @@ class ClothingItem(Base):
         back_populates="item",
         cascade="all, delete-orphan",
         order_by="ItemImage.position",
+    )
+
+
+class DuplicateMatchCandidate(Base):
+    __tablename__ = "duplicate_match_candidates"
+    __table_args__ = (
+        CheckConstraint("item_low_id <> item_high_id", name="ck_duplicate_match_distinct_items"),
+        CheckConstraint("item_low_id < item_high_id", name="ck_duplicate_match_ordered_items"),
+        UniqueConstraint("item_low_id", "item_high_id", name="uq_duplicate_match_item_pair"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    item_low_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("clothing_items.id", ondelete="CASCADE"), nullable=False
+    )
+    item_high_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("clothing_items.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[DuplicateMatchStatus] = mapped_column(
+        Enum(DuplicateMatchStatus, name="duplicate_match_status"),
+        nullable=False,
+        default=DuplicateMatchStatus.pending,
+    )
+    canonical_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("clothing_items.id", ondelete="RESTRICT")
+    )
+    cosine_score: Mapped[Decimal | None] = mapped_column(Numeric(6, 5))
+    matcher_revision: Mapped[str] = mapped_column(String(100), nullable=False)
+    evidence: Mapped[dict] = mapped_column(JSONB, default=dict)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
 
