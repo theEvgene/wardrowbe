@@ -147,17 +147,39 @@ class ItemService:
         image_hash: str,
         threshold: int = 8,
     ) -> ClothingItem | None:
-        # For exact duplicate detection (same hash)
+        """Find the nearest active pHash within the near-identical-image threshold.
+
+        pHash is intentionally only the cheap copy/recompression gate. Cross-angle
+        garment identity is handled by the review-only duplicate matcher.
+        """
+        if threshold < 0:
+            raise ValueError("threshold must be non-negative")
+        try:
+            target_hash = int(image_hash, 16)
+        except ValueError:
+            return None
+
         result = await self.db.execute(
             select(ClothingItem).where(
                 and_(
                     ClothingItem.user_id == user_id,
-                    ClothingItem.image_hash == image_hash,
+                    ClothingItem.image_hash.is_not(None),
                     ClothingItem.is_archived.is_(False),
                 )
             )
         )
-        return result.scalar_one_or_none()
+        matches: list[tuple[int, UUID, ClothingItem]] = []
+        for item in result.scalars():
+            try:
+                distance = (int(item.image_hash, 16) ^ target_hash).bit_count()
+            except (TypeError, ValueError):
+                continue
+            if distance <= threshold:
+                matches.append((distance, item.id, item))
+
+        if not matches:
+            return None
+        return min(matches, key=lambda match: (match[0], match[1]))[2]
 
     async def find_by_upload_key(
         self,

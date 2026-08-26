@@ -261,6 +261,35 @@ class TestItemService:
     """Tests for ItemService business logic."""
 
     @pytest.mark.asyncio
+    async def test_find_duplicate_by_hash_uses_hamming_distance_threshold(
+        self, db_session: AsyncSession, test_user
+    ):
+        item = ClothingItem(
+            user_id=test_user.id,
+            type="shirt",
+            image_path=f"test/{uuid4()}.jpg",
+            image_hash="0000000000000000",
+            status=ItemStatus.ready,
+        )
+        db_session.add(item)
+        await db_session.commit()
+
+        service = ItemService(db_session)
+
+        assert (
+            await service.find_duplicate_by_hash(
+                test_user.id, "00000000000000ff", threshold=8
+            )
+            == item
+        )
+        assert (
+            await service.find_duplicate_by_hash(
+                test_user.id, "00000000000001ff", threshold=8
+            )
+            is None
+        )
+
+    @pytest.mark.asyncio
     async def test_get_ready_item_count(self, db_session: AsyncSession, test_user):
         ready_item = ClothingItem(
             user_id=test_user.id,
