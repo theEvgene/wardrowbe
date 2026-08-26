@@ -299,9 +299,7 @@ async def test_production_model_revision_fits_duplicate_candidate(
     provider.model = "facebook/dinov2-small"
     provider.model_revision = "ed25f3a31f01632728cabb09d1542f84ab7b0056"
     provider.preprocess_revision = "transformers-4.52.3-slow-image-processor-v1"
-    expected_revision = (
-        f"{provider.model}:{provider.model_revision}:{provider.preprocess_revision}"
-    )
+    expected_revision = f"{provider.model}:{provider.model_revision}:{provider.preprocess_revision}"
     assert len(expected_revision) > 100
 
     service = GarmentIdentityService(
