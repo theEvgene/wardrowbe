@@ -47,7 +47,10 @@
       "rate": "Bewerten",
       "title": "Familienbewertungen"
     },
-    "imageRotated": "Bild gedreht",
+      "imageRotated": "Bild gedreht",
+      "compositeView": "Ganzes Outfit",
+      "itemView": "Artikeldetails",
+      "itemCount": "{count, plural, one {# Artikel} other {# Artikel}}",
     "noImage": "Kein Bild",
     "rotateFailed": "Bild konnte nicht gedreht werden",
     "rotateLeft": "Nach links drehen",

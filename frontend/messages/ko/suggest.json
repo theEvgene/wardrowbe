@@ -47,7 +47,10 @@
       "rate": "평가",
       "title": "가족 평가"
     },
-    "imageRotated": "이미지가 회전되었어요",
+      "imageRotated": "이미지가 회전되었어요",
+      "compositeView": "전체 코디",
+      "itemView": "아이템 상세",
+      "itemCount": "{count}개 아이템",
     "noImage": "이미지 없음",
     "rotateFailed": "이미지 회전 실패",
     "rotateLeft": "왼쪽 회전",

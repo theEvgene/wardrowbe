@@ -77,6 +77,33 @@ async def _generate_with_ai_payload(
     return outfits[0]
 
 
+class TestOutfitCompositeImages:
+    @pytest.mark.asyncio
+    async def test_outfit_response_exposes_signed_garment_cutout(
+        self, client: AsyncClient, auth_headers, db_session: AsyncSession, test_user
+    ):
+        item = _make_item(
+            test_user.id,
+            "coat",
+            background_removal={
+                "outcome": "accepted",
+                "mode": "garment",
+                "transparent_path": "test/coat-cutout.png",
+            },
+        )
+        db_session.add(item)
+        await db_session.flush()
+        outfit = _make_pairing(test_user.id, [item])
+        db_session.add(outfit)
+        await db_session.commit()
+
+        response = await client.get(f"/api/v1/outfits/{outfit.id}", headers=auth_headers)
+
+        assert response.status_code == 200, response.json()
+        transparent_url = response.json()["items"][0]["transparent_url"]
+        assert transparent_url.startswith("/api/v1/images/test/coat-cutout.png?")
+
+
 class TestPairingCopyValidation:
     @pytest.mark.asyncio
     async def test_valid_structured_copy_is_preserved(

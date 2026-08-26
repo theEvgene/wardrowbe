@@ -47,7 +47,10 @@
       "rate": "Noter",
       "title": "Notes de la famille"
     },
-    "imageRotated": "Image pivotée",
+      "imageRotated": "Image pivotée",
+      "compositeView": "Tenue complète",
+      "itemView": "Détails de l’article",
+      "itemCount": "{count, plural, one {# article} other {# articles}}",
     "noImage": "Pas d'image",
     "rotateFailed": "Échec de la rotation de l'image",
     "rotateLeft": "Rotation à gauche",

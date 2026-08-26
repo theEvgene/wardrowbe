@@ -124,6 +124,7 @@ class OutfitItemResponse(BaseModel):
     colors: list[str] = []
     image_path: str | None = None
     thumbnail_path: str | None = None
+    transparent_path: str | None = Field(default=None, exclude=True)
     layer_type: str | None = None
     position: int
 
@@ -139,6 +140,13 @@ class OutfitItemResponse(BaseModel):
     def thumbnail_url(self) -> str | None:
         if self.thumbnail_path:
             return sign_image_url(self.thumbnail_path)
+        return None
+
+    @computed_field
+    @property
+    def transparent_url(self) -> str | None:
+        if self.transparent_path:
+            return sign_image_url(self.transparent_path)
         return None
 
 
@@ -353,6 +361,7 @@ def outfit_to_response(
                 colors=item.colors or [],
                 image_path=item.image_path,
                 thumbnail_path=item.thumbnail_path,
+                transparent_path=(item.background_removal or {}).get("transparent_path"),
                 layer_type=outfit_item.layer_type,
                 position=outfit_item.position,
             )

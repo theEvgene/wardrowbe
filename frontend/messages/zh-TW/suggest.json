@@ -47,7 +47,10 @@
       "rate": "評分",
       "title": "家庭評分"
     },
-    "imageRotated": "圖片已旋轉",
+      "imageRotated": "圖片已旋轉",
+      "compositeView": "完整穿搭",
+      "itemView": "單品詳情",
+      "itemCount": "{count} 件單品",
     "noImage": "無圖片",
     "rotateFailed": "旋轉圖片失敗",
     "rotateLeft": "向左旋轉",

@@ -47,7 +47,10 @@
       "rate": "Rate",
       "title": "Family Ratings"
     },
-    "imageRotated": "Image rotated",
+      "imageRotated": "Image rotated",
+      "compositeView": "Whole outfit",
+      "itemView": "Item details",
+      "itemCount": "{count, plural, one {# item} other {# items}}",
     "noImage": "No image",
     "rotateFailed": "Failed to rotate image",
     "rotateLeft": "Rotate left",

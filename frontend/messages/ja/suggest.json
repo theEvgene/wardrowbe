@@ -47,7 +47,10 @@
       "rate": "評価",
       "title": "ファミリー評価"
     },
-    "imageRotated": "画像を回転しました",
+      "imageRotated": "画像を回転しました",
+      "compositeView": "コーデ全体",
+      "itemView": "アイテム詳細",
+      "itemCount": "{count}点",
     "noImage": "画像なし",
     "rotateFailed": "画像の回転に失敗しました",
     "rotateLeft": "左に回転",

@@ -1,9 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { CalendarDays, ChevronLeft, ChevronRight, X, RotateCcw, RotateCw, Loader2, Users, Star, ExternalLink } from 'lucide-react';
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  RotateCcw,
+  RotateCw,
+  Loader2,
+  Users,
+  Star,
+  ExternalLink,
+  ImageIcon,
+  LayoutGrid,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -17,6 +30,7 @@ import { FamilyRatingForm, FamilyRatingsDisplay } from '@/components/family-rati
 import { toast } from 'sonner';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
+import { OutfitCompositePreview } from '@/components/outfit-composite-preview';
 
 interface OutfitPreviewDialogProps {
   outfit: Outfit;
@@ -32,6 +46,7 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
   const [currentIndex, setCurrentIndex] = useState(0);
   const [imageKey, setImageKey] = useState(0); // Force image reload after rotation
   const [showRatingForm, setShowRatingForm] = useState(false);
+  const [viewMode, setViewMode] = useState<'composite' | 'item'>('composite');
   const items = outfit.items;
   const rotateImage = useRotateImage();
   const { data: session } = useSession();
@@ -42,6 +57,13 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
   const isInFamily = !!family && !!currentMember;
   const canRate = isInFamily && !isOwner;
   const myRating = outfit.family_ratings?.find((r) => r.user_id === currentMember?.id);
+
+  useEffect(() => {
+    if (open) {
+      setViewMode('composite');
+      setCurrentIndex(0);
+    }
+  }, [open, outfit.id]);
 
   const currentItem = items[currentIndex];
 
@@ -80,7 +102,9 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
                 </span>
               )}
               <span className="text-xs text-muted-foreground">
-                {currentIndex + 1} / {items.length}
+                {viewMode === 'composite'
+                  ? t('itemCount', { count: items.length })
+                  : `${currentIndex + 1} / ${items.length}`}
               </span>
             </div>
           </div>
@@ -91,6 +115,33 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto overscroll-contain">
+          <div className="flex gap-1 border-b p-2">
+            <Button
+              variant={viewMode === 'composite' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="flex-1 gap-1.5"
+              onClick={() => setViewMode('composite')}
+            >
+              <LayoutGrid className="h-4 w-4" />
+              {t('compositeView')}
+            </Button>
+            <Button
+              variant={viewMode === 'item' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="flex-1 gap-1.5"
+              onClick={() => setViewMode('item')}
+            >
+              <ImageIcon className="h-4 w-4" />
+              {t('itemView')}
+            </Button>
+          </div>
+
+          {viewMode === 'composite' ? (
+            <div className="p-3 sm:p-4">
+              <OutfitCompositePreview items={items} className="mx-auto max-w-sm" />
+            </div>
+          ) : (
+            <>
           {/* Main image area */}
           <div className="relative bg-muted">
             <Link href={`/dashboard/wardrobe?item=${currentItem.id}`} className="block">
@@ -237,6 +288,8 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
                 ))}
               </div>
             </div>
+          )}
+            </>
           )}
 
           {/* Outfit details section */}

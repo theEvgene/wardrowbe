@@ -22,6 +22,7 @@ export interface OutfitItem {
   thumbnail_path: string | null;
   thumbnail_url?: string;
   image_url?: string;
+  transparent_url?: string | null;
   layer_type: string | null;
   position: number;
 }

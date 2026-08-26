@@ -47,7 +47,10 @@
       "rate": "Valuta",
       "title": "Valutazioni famiglia"
     },
-    "imageRotated": "Immagine ruotata",
+      "imageRotated": "Immagine ruotata",
+      "compositeView": "Outfit completo",
+      "itemView": "Dettagli capo",
+      "itemCount": "{count, plural, one {# capo} other {# capi}}",
     "noImage": "Nessuna immagine",
     "rotateFailed": "Rotazione immagine fallita",
     "rotateLeft": "Ruota a sinistra",
