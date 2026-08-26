@@ -103,6 +103,31 @@ class TestOutfitCompositeImages:
         transparent_url = response.json()["items"][0]["transparent_url"]
         assert transparent_url.startswith("/api/v1/images/test/coat-cutout.png?")
 
+    @pytest.mark.asyncio
+    async def test_pairing_response_exposes_signed_garment_cutout(
+        self, client: AsyncClient, auth_headers, db_session: AsyncSession, test_user
+    ):
+        item = _make_item(
+            test_user.id,
+            "coat",
+            background_removal={
+                "outcome": "accepted",
+                "mode": "garment",
+                "transparent_path": "test/pairing-coat-cutout.png",
+            },
+        )
+        db_session.add(item)
+        await db_session.flush()
+        pairing = _make_pairing(test_user.id, [item], source_item=item)
+        db_session.add(pairing)
+        await db_session.commit()
+
+        response = await client.get("/api/v1/pairings", headers=auth_headers)
+
+        assert response.status_code == 200, response.json()
+        transparent_url = response.json()["pairings"][0]["items"][0]["transparent_url"]
+        assert transparent_url.startswith("/api/v1/images/test/pairing-coat-cutout.png?")
+
 
 class TestPairingCopyValidation:
     @pytest.mark.asyncio
