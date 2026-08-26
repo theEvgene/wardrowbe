@@ -156,6 +156,18 @@
       "washIntervalDefault": "Par défaut : {count}"
     },
     "primaryColor": "Couleur principale",
+    "review": {
+      "title": "Vérifier les détails",
+      "description": "Vérifiez les informations signalées avant d’utiliser cet article dans des tenues.",
+      "complete": "Ces informations ne présentent aucun avertissement.",
+      "confirmAll": "Enregistrer et confirmer",
+      "fields": {
+        "type": "Type", "subtype": "Sous-type", "colors": "Couleurs (séparées par des virgules)",
+        "primary_color": "Couleur principale", "material": "Matière", "pattern": "Motif",
+        "season": "Saisons (séparées par des virgules)", "formality": "Formalité", "style": "Styles (séparés par des virgules)"
+      },
+      "status": { "missing": "Manquant", "uncertain": "À vérifier", "confirmed": "Confirmé" }
+    },
     "titles": {
       "analysisInProgress": "Analyse en cours...",
       "deleteImage": "Supprimer l'image",

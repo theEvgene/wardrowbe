@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import { api, getAccessToken, setAccessToken, ApiError, NetworkError } from '@/lib/api';
 import {
   Item,
+  ItemUpdateData,
   ItemListResponse,
   ItemFilter,
   WashHistoryEntry,
@@ -143,7 +144,7 @@ export function useUpdateItem() {
   const { data: session } = useSession();
 
   return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<Item> }) => {
+    mutationFn: async ({ id, data }: { id: string; data: ItemUpdateData }) => {
       if (session?.accessToken) {
         setAccessToken(session.accessToken as string);
       }
@@ -160,12 +161,20 @@ export function useUpdateItem() {
         if (!old) return old;
         return {
           ...old,
-          items: old.items.map((item) => (item.id === id ? { ...item, ...data } : item)),
+          items: old.items.map((item) =>
+            item.id === id
+              ? { ...item, ...data, tags: data.tags ? { ...item.tags, ...data.tags } : item.tags }
+              : item,
+          ),
         };
       });
 
       if (previousItemData) {
-        queryClient.setQueryData<Item>(['item', id], { ...previousItemData, ...data });
+        queryClient.setQueryData<Item>(['item', id], {
+          ...previousItemData,
+          ...data,
+          tags: data.tags ? { ...previousItemData.tags, ...data.tags } : previousItemData.tags,
+        });
       }
 
       return { previousListData, previousItemData };

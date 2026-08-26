@@ -70,6 +70,19 @@ class ItemUpdate(BaseModel):
     colors: list[str] | None = None
     primary_color: str | None = None
     wash_interval: int | None = None
+    confirm_fields: list[
+        Literal[
+            "type",
+            "subtype",
+            "colors",
+            "primary_color",
+            "material",
+            "pattern",
+            "season",
+            "formality",
+            "style",
+        ]
+    ] = Field(default_factory=list)
 
 
 class BackgroundRemovalMetadata(BaseModel):
@@ -150,6 +163,7 @@ class ItemResponse(ItemBase):
     status: str
     ai_processed: bool = False
     ai_confidence: Decimal | None = None
+    field_metadata: dict[str, dict[str, Any]] = Field(default_factory=dict)
     ai_description: str | None = None
     ai_error: str | None = None
     ai_started_at: datetime | None = None

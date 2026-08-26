@@ -268,6 +268,7 @@ class ItemService:
 
     async def update(self, item: ClothingItem, item_data: ItemUpdate) -> ClothingItem:
         update_data = item_data.model_dump(exclude_unset=True)
+        confirm_fields = update_data.pop("confirm_fields", [])
 
         if "tags" in update_data and update_data["tags"]:
             tags = update_data["tags"]
@@ -275,6 +276,55 @@ class ItemService:
                 update_data["tags"] = {k: v for k, v in tags.items() if v is not None}
             else:
                 update_data["tags"] = tags.model_dump(exclude_none=True)
+
+        tag_data = update_data.get("tags") or {}
+        edited_fields = {
+            field
+            for field in ("type", "subtype", "colors", "primary_color")
+            if field in update_data
+        }
+        edited_fields.update(
+            field
+            for field in (
+                "colors",
+                "primary_color",
+                "pattern",
+                "material",
+                "style",
+                "season",
+                "formality",
+            )
+            if field in tag_data
+        )
+
+        primary_color = update_data.get(
+            "primary_color", tag_data.get("primary_color", item.primary_color)
+        )
+        colors = update_data.get("colors", tag_data.get("colors", item.colors or []))
+        if primary_color and primary_color not in colors:
+            colors = [primary_color, *colors]
+            if "tags" in update_data:
+                tag_data["colors"] = colors
+                update_data["tags"] = tag_data
+            else:
+                update_data["colors"] = colors
+
+        if edited_fields or confirm_fields:
+            now = datetime.now(UTC).isoformat()
+            field_metadata = dict(item.field_metadata or {})
+            for field in edited_fields:
+                field_metadata[field] = {
+                    **field_metadata.get(field, {}),
+                    "provenance": "user_edited",
+                    "edited_at": now,
+                }
+            for field in confirm_fields:
+                field_metadata[field] = {
+                    **field_metadata.get(field, {}),
+                    "provenance": "user_confirmed",
+                    "confirmed_at": now,
+                }
+            item.field_metadata = field_metadata
 
         for field, value in update_data.items():
             setattr(item, field, value)

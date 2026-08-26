@@ -156,6 +156,18 @@
       "washIntervalDefault": "默认：{count}"
     },
     "primaryColor": "主要颜色",
+    "review": {
+      "title": "检查单品信息",
+      "description": "在搭配中使用此单品前，请检查突出显示的信息。",
+      "complete": "这些信息没有待处理的警告。",
+      "confirmAll": "保存并确认",
+      "fields": {
+        "type": "类型", "subtype": "子类型", "colors": "颜色（逗号分隔）",
+        "primary_color": "主要颜色", "material": "材质", "pattern": "图案",
+        "season": "季节（逗号分隔）", "formality": "正式度", "style": "风格（逗号分隔）"
+      },
+      "status": { "missing": "缺失", "uncertain": "需检查", "confirmed": "已确认" }
+    },
     "titles": {
       "analysisInProgress": "分析进行中...",
       "deleteImage": "删除图片",

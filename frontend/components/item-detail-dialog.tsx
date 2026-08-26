@@ -61,10 +61,11 @@ import { Progress } from '@/components/ui/progress';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { useUpdateItem, useDeleteItem, useReanalyzeItem, useRotateImage, useRemoveBackground, useRestoreOriginal, useReplaceItemImage, useLogWash, useWashHistory, useItemWearStats, useItemWearHistory, useAddItemImage, useDeleteItemImage, useSetPrimaryImage } from '@/lib/hooks/use-items';
-import { Item } from '@/lib/types';
+import { Item, ItemMetadataUpdate } from '@/lib/types';
 import { useClothingTypes, useClothingColors } from '@/lib/hooks/use-translated-constants';
 import { ColorEyedropper } from '@/components/color-eyedropper';
 import { GeneratePairingsDialog } from '@/components/generate-pairings-dialog';
+import { MetadataReview } from '@/components/metadata-review';
 import { useFeatures } from '@/lib/hooks/use-features';
 import { useTranslations } from 'next-intl';
 
@@ -154,6 +155,14 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
       setIsEditing(false);
     } catch (error) {
       console.error('Failed to update item:', error);
+    }
+  };
+
+  const handleMetadataReview = async (data: ItemMetadataUpdate) => {
+    try {
+      await updateItem.mutateAsync({ id: item.id, data });
+    } catch (error) {
+      console.error('Failed to confirm item metadata:', error);
     }
   };
 
@@ -877,6 +886,14 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                         </Collapsible>
                       )}
                     </div>
+                  )}
+
+                  {item.ai_processed && item.status === 'ready' && (
+                    <MetadataReview
+                      item={item}
+                      onSubmit={handleMetadataReview}
+                      isPending={updateItem.isPending}
+                    />
                   )}
 
                   {/* AI Analysis */}

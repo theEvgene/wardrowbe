@@ -156,6 +156,18 @@
       "washIntervalDefault": "Standard: {count}"
     },
     "primaryColor": "Hauptfarbe",
+    "review": {
+      "title": "Artikeldetails prüfen",
+      "description": "Prüfe die markierten Angaben, bevor du den Artikel in Outfits verwendest.",
+      "complete": "Für diese Angaben gibt es keine offenen Hinweise.",
+      "confirmAll": "Speichern und bestätigen",
+      "fields": {
+        "type": "Typ", "subtype": "Untertyp", "colors": "Farben (kommagetrennt)",
+        "primary_color": "Hauptfarbe", "material": "Material", "pattern": "Muster",
+        "season": "Jahreszeiten (kommagetrennt)", "formality": "Formalität", "style": "Stile (kommagetrennt)"
+      },
+      "status": { "missing": "Fehlt", "uncertain": "Prüfen", "confirmed": "Bestätigt" }
+    },
     "titles": {
       "analysisInProgress": "Analyse läuft...",
       "deleteImage": "Bild löschen",

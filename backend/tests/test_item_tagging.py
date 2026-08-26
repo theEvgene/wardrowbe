@@ -250,6 +250,64 @@ class TestPendingFilter:
 
 class TestWriteBack:
     @pytest.mark.asyncio
+    async def test_confirmed_primary_color_tracks_provenance_and_normalizes_colors(
+        self, client: AsyncClient, auth_headers, test_user, db_session: AsyncSession
+    ):
+        item = ClothingItem(
+            user_id=test_user.id,
+            type="shirt",
+            image_path="test/confirm-primary-color.jpg",
+            status=ItemStatus.ready,
+            colors=[],
+            primary_color="navy",
+        )
+        db_session.add(item)
+        await db_session.commit()
+
+        response = await client.patch(
+            f"/api/v1/items/{item.id}",
+            json={"confirm_fields": ["primary_color"]},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200, response.json()
+        data = response.json()
+        assert data["colors"] == ["navy"]
+        assert data["field_metadata"]["primary_color"]["provenance"] == "user_confirmed"
+
+    @pytest.mark.asyncio
+    async def test_corrected_metadata_tracks_user_edit_and_normalizes_new_primary_color(
+        self, client: AsyncClient, auth_headers, test_user, db_session: AsyncSession
+    ):
+        item = ClothingItem(
+            user_id=test_user.id,
+            type="shirt",
+            image_path="test/correct-metadata.jpg",
+            status=ItemStatus.ready,
+            colors=["blue"],
+            primary_color="blue",
+            material="polyester",
+        )
+        db_session.add(item)
+        await db_session.commit()
+
+        response = await client.patch(
+            f"/api/v1/items/{item.id}",
+            json={
+                "primary_color": "navy",
+                "tags": {"colors": ["blue"], "material": "cotton"},
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200, response.json()
+        data = response.json()
+        assert data["colors"] == ["navy", "blue"]
+        assert data["material"] == "cotton"
+        assert data["field_metadata"]["primary_color"]["provenance"] == "user_edited"
+        assert data["field_metadata"]["material"]["provenance"] == "user_edited"
+
+    @pytest.mark.asyncio
     async def test_real_tag_content_flips_to_tagged_manual(
         self, client: AsyncClient, auth_headers, test_user, db_session: AsyncSession
     ):
@@ -458,9 +516,7 @@ class TestWorkerTaggingOrigin:
         db_session.add(item)
         await db_session.commit()
 
-        stub_tags = ClothingTags(
-            type="shirt", primary_color="blue", colors=["blue"], confidence=0.9
-        )
+        stub_tags = ClothingTags(type="shirt", primary_color="blue", colors=[], confidence=0.9)
 
         class _StubAI:
             def __init__(self, *args, **kwargs):
@@ -484,6 +540,15 @@ class TestWorkerTaggingOrigin:
         assert refreshed.tagged_by == TaggedBy.auto
         assert refreshed.tagged_at is not None
         assert refreshed.status == ItemStatus.ready
+        assert refreshed.colors == ["blue"]
+        assert refreshed.field_metadata["type"] == {
+            "confidence": 0.9,
+            "provenance": "auto",
+        }
+        assert refreshed.field_metadata["material"] == {
+            "confidence": 0.0,
+            "provenance": "auto",
+        }
         mock_redis.enqueue_job.assert_awaited_once_with(
             "match_garment_identity",
             str(item.id),
@@ -533,6 +598,50 @@ class TestWorkerTaggingOrigin:
         assert refreshed.tagged_at == manual_tagged_at
         assert refreshed.ai_processed is True
         assert refreshed.status == ItemStatus.ready
+
+    @pytest.mark.asyncio
+    async def test_reanalysis_preserves_confirmed_empty_field(
+        self, db_session: AsyncSession, test_user, monkeypatch
+    ):
+        item = ClothingItem(
+            user_id=test_user.id,
+            type="shirt",
+            image_path="test/worker-confirmed-empty.jpg",
+            status=ItemStatus.processing,
+            season=[],
+            field_metadata={"season": {"provenance": "user_confirmed"}},
+        )
+        db_session.add(item)
+        await db_session.commit()
+
+        stub_tags = ClothingTags(
+            type="shirt",
+            primary_color="blue",
+            colors=["blue"],
+            season=["summer"],
+            confidence=0.82,
+        )
+
+        class _StubAI:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def analyze_image(self, path):
+                return stub_tags
+
+        monkeypatch.setattr(tagging, "AIService", _StubAI)
+
+        with (
+            patch("app.workers.tagging.get_db_session", return_value=db_session),
+            patch.object(db_session, "close", new_callable=AsyncMock),
+        ):
+            result = await tagging.tag_item_image({}, str(item.id), __file__)
+
+        assert result["status"] == "success"
+        refreshed = await _get_item(db_session, item.id)
+        assert refreshed.season == []
+        assert refreshed.tags["season"] == []
+        assert refreshed.field_metadata["season"]["provenance"] == "user_confirmed"
 
 
 class TestMarkItemTaggingSkipped:

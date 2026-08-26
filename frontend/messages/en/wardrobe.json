@@ -156,6 +156,18 @@
       "washIntervalDefault": "Default: {count}"
     },
     "primaryColor": "Primary Color",
+    "review": {
+      "title": "Review item details",
+      "description": "Check the highlighted details before using this item in outfits.",
+      "complete": "These details have no unresolved warnings.",
+      "confirmAll": "Save and confirm",
+      "fields": {
+        "type": "Type", "subtype": "Subtype", "colors": "Colors (comma-separated)",
+        "primary_color": "Primary color", "material": "Material", "pattern": "Pattern",
+        "season": "Seasons (comma-separated)", "formality": "Formality", "style": "Styles (comma-separated)"
+      },
+      "status": { "missing": "Missing", "uncertain": "Check", "confirmed": "Confirmed" }
+    },
     "titles": {
       "analysisInProgress": "Analysis in progress...",
       "deleteImage": "Delete image",

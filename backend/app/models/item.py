@@ -110,6 +110,7 @@ class ClothingItem(Base):
     ai_processed: Mapped[bool] = mapped_column(Boolean, default=False)
     ai_confidence: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
     ai_raw_response: Mapped[dict | None] = mapped_column(JSONB)
+    field_metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
     # Tagging lifecycle (external agent hand-off)
     tagging_status: Mapped[TaggingStatus] = mapped_column(

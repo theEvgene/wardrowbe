@@ -156,6 +156,18 @@
       "washIntervalDefault": "預設：{count}"
     },
     "primaryColor": "主色",
+    "review": {
+      "title": "檢查單品資訊",
+      "description": "在穿搭中使用此單品前，請檢查標示的資訊。",
+      "complete": "這些資訊沒有待處理的警告。",
+      "confirmAll": "儲存並確認",
+      "fields": {
+        "type": "類型", "subtype": "子類型", "colors": "顏色（逗號分隔）",
+        "primary_color": "主色", "material": "材質", "pattern": "圖案",
+        "season": "季節（逗號分隔）", "formality": "正式度", "style": "風格（逗號分隔）"
+      },
+      "status": { "missing": "缺少", "uncertain": "需檢查", "confirmed": "已確認" }
+    },
     "titles": {
       "analysisInProgress": "分析進行中...",
       "deleteImage": "刪除圖片",

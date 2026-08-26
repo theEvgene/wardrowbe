@@ -16,6 +16,37 @@ export interface ItemTags {
   logprobs_confidence?: number;
 }
 
+export type ItemMetadataField =
+  | 'type'
+  | 'subtype'
+  | 'colors'
+  | 'primary_color'
+  | 'material'
+  | 'pattern'
+  | 'season'
+  | 'formality'
+  | 'style';
+
+export interface ItemFieldMetadata {
+  confidence?: number;
+  provenance: 'auto' | 'user_edited' | 'user_confirmed';
+  edited_at?: string;
+  confirmed_at?: string;
+}
+
+export interface ItemMetadataUpdate {
+  type: string;
+  subtype?: string;
+  primary_color?: string;
+  tags: Partial<ItemTags>;
+  confirm_fields: ItemMetadataField[];
+}
+
+export type ItemUpdateData = Omit<Partial<Item>, 'tags'> & {
+  tags?: Partial<ItemTags>;
+  confirm_fields?: ItemMetadataField[];
+};
+
 export interface Item {
   id: string;
   user_id: string;
@@ -37,9 +68,15 @@ export interface Item {
   tags: ItemTags;
   colors: string[];
   primary_color?: string;
+  pattern?: string;
+  material?: string;
+  style: string[];
+  formality?: string;
+  season: string[];
   status: 'processing' | 'ready' | 'error' | 'archived';
   ai_processed: boolean;
   ai_confidence?: number;
+  field_metadata: Partial<Record<ItemMetadataField, ItemFieldMetadata>>;
   ai_description?: string;
   ai_error?: string | null;
   ai_started_at?: string | null;
