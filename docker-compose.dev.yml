@@ -33,7 +33,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: ${BACKEND_COMMAND:-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload}
     volumes:
       - ./backend:/app
       - wardrobe_data:/data/wardrobe
@@ -52,7 +52,7 @@ services:
     environment:
       NODE_ENV: development
       # For local dev, use http://localhost:3000 (simpler, no cert issues)
-      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       BACKEND_URL: http://backend:8000
       WATCHPACK_POLLING: "true"
 

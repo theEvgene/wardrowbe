@@ -15,6 +15,17 @@ const shoesFixturePath = fileURLToPath(
   new URL('../../backend/tests/fixtures/garment_extraction/hanger.jpg', import.meta.url),
 );
 
+function dateInTimeZone(daysFromNow, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000));
+  const value = Object.fromEntries(parts.map(({ type, value: part }) => [type, part]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage();
 const pageErrors = [];
@@ -185,6 +196,22 @@ try {
 
   const onboarding = await api('/users/me/onboarding/complete', { method: 'POST' });
   assert.equal(onboarding.ok, true, `Onboarding failed: ${onboarding.status}`);
+  const profile = await api('/users/me', {
+    method: 'PATCH',
+    json: {
+      timezone: 'Europe/Moscow',
+      location_name: 'Moscow',
+      location_lat: 55.7558,
+      location_lon: 37.6173,
+    },
+  });
+  assert.equal(profile.ok, true, `Profile context setup failed: ${profile.status}`);
+  const preferences = await api('/users/me/preferences', {
+    method: 'PATCH',
+    json: { avoid_repeat_days: 0 },
+  });
+  assert.equal(preferences.ok, true, `Preference setup failed: ${preferences.status}`);
+  assert.equal(preferences.body.avoid_repeat_days, 0);
 
   const image = await readFile(fixturePath);
   let source = await uploadItem({
@@ -325,6 +352,19 @@ try {
   await page.goto(`${baseUrl}/dashboard/suggest`, { waitUntil: 'networkidle' });
   await page.locator('button[aria-pressed]').filter({ hasText: 'casual' }).click();
   await page.getByLabel('Number of outfits').fill('2');
+  const scheduledFor = dateInTimeZone(1, 'Europe/Moscow');
+  await page.getByLabel('Date').fill(scheduledFor);
+  await page.getByLabel('Time of day').selectOption('evening');
+  await page.getByLabel('Activity').fill('Dinner and a walk');
+  const requiredItems = page.locator('details').filter({ hasText: 'Require items' });
+  await requiredItems.getByText(/Require items/).click();
+  await page
+    .getByRole('button')
+    .filter({ has: page.getByRole('img', { name: shoes.name }) })
+    .last()
+    .click();
+  await page.getByLabel('Avoided colors').fill('orange');
+  await page.getByLabel('Additional constraints').fill('Keep it rain friendly');
   await page.locator('button[data-selected]').filter({ hasText: 'Casual' }).click();
   const generationStartedAt = Date.now();
   const [generationResponse] = await Promise.all([
@@ -337,6 +377,7 @@ try {
     page.getByRole('button', { name: 'Get Suggestion' }).click(),
   ]);
   const generationLatencyMs = Date.now() - generationStartedAt;
+  const generationRequest = generationResponse.request().postDataJSON();
   const generatedBatch = await generationResponse.json();
   assert.equal(
     generationResponse.ok(),
@@ -345,14 +386,51 @@ try {
   );
   assert.equal(generatedBatch.outfits.length, 2, 'Real model did not return exactly two outfits');
   assert.match(generatedBatch.model || '', /gemma3:4b/i, 'Unexpected local text model');
+  assert.deepEqual(generationRequest, {
+    target_style: 'casual',
+    count: 2,
+    occasion: 'casual',
+    scheduled_for: scheduledFor,
+    time_of_day: 'evening',
+    activity: 'Dinner and a walk',
+    constraints: {
+      required_item_ids: [shoes.id],
+      excluded_item_ids: [],
+      avoided_colors: ['orange'],
+      note: 'Keep it rain friendly',
+    },
+  });
   const activeItemIds = new Set(itemIds);
+  const weatherSnapshot = generatedBatch.outfits[0].weather;
+  assert.ok(weatherSnapshot?.condition, 'Real Open-Meteo forecast was not persisted');
   for (const outfit of generatedBatch.outfits) {
     outfitIds.push(outfit.id);
     assert.equal(outfit.target_style, 'casual');
+    assert.equal(outfit.scheduled_for, scheduledFor);
+    assert.deepEqual(outfit.weather, weatherSnapshot, 'Batch weather snapshot changed per outfit');
+    assert.equal(outfit.generation_context?.time_of_day, 'evening');
+    assert.equal(outfit.generation_context?.activity, 'Dinner and a walk');
+    assert.equal(outfit.generation_context?.applied_preferences?.avoid_repeat_days, 0);
+    assert.deepEqual(outfit.generation_context?.constraints?.required_item_ids, [shoes.id]);
+    assert.deepEqual(outfit.generation_context?.constraints?.avoided_colors, ['orange']);
+    assert.equal(outfit.generation_context?.constraints?.note, 'Keep it rain friendly');
     assert.ok(outfit.items.every((item) => activeItemIds.has(item.id)));
+    assert.ok(outfit.items.some((item) => item.id === shoes.id), 'Required shoes were omitted');
+    assert.ok(
+      outfit.items.every(
+        (item) =>
+          item.primary_color?.toLowerCase() !== 'orange' &&
+          !(item.colors || []).some((color) => color.toLowerCase() === 'orange'),
+      ),
+      'Avoided color leaked into a generated outfit',
+    );
     const types = new Set(outfit.items.map((item) => item.type));
     assert.ok(types.has('shoes'));
     assert.ok(types.has('dress') || (types.has('shirt') && types.has('pants')));
+    const persisted = await api(`/outfits/${outfit.id}`);
+    assert.equal(persisted.ok, true, `Generated Outfit reload failed: ${persisted.status}`);
+    assert.deepEqual(persisted.body.generation_context, outfit.generation_context);
+    assert.deepEqual(persisted.body.weather, weatherSnapshot);
   }
   await page.getByTestId('outfit-composite').first().waitFor();
   assert.equal(await page.getByTestId('outfit-composite').count(), 2);
@@ -374,6 +452,10 @@ try {
       style_generation_model: generatedBatch.model,
       style_generation_latency_ms: generationLatencyMs,
       generated_outfits: generatedBatch.outfits.length,
+      scheduled_for: scheduledFor,
+      activity: generationRequest.activity,
+      required_item_id: shoes.id,
+      forecast_condition: weatherSnapshot.condition,
     }),
   );
 } finally {
