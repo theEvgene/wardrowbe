@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildStyleBatchRequest } from '@/lib/style-outfits';
+import { buildStyleBatchRequest, getStyleDateBounds } from '@/lib/style-outfits';
 
 describe('buildStyleBatchRequest', () => {
   it('sends the selected detected style and default batch size', () => {
@@ -13,5 +13,49 @@ describe('buildStyleBatchRequest', () => {
 
   it.each([0, 21])('rejects an out-of-range count: %s', (count) => {
     expect(() => buildStyleBatchRequest('casual', count, 'casual')).toThrow(RangeError);
+  });
+
+  it('sends the complete context contract with normalized colors', () => {
+    expect(
+      buildStyleBatchRequest('casual', 3, 'casual', {
+        scheduledFor: '2026-08-31',
+        timeOfDay: 'evening',
+        activity: 'Dinner and a walk',
+        requiredItemIds: ['required-id'],
+        excludedItemIds: ['excluded-id'],
+        avoidedColors: [' Orange ', 'orange', 'LIME'],
+        note: 'Prefer light layers',
+      }),
+    ).toEqual({
+      target_style: 'casual',
+      count: 3,
+      occasion: 'casual',
+      scheduled_for: '2026-08-31',
+      time_of_day: 'evening',
+      activity: 'Dinner and a walk',
+      constraints: {
+        required_item_ids: ['required-id'],
+        excluded_item_ids: ['excluded-id'],
+        avoided_colors: ['orange', 'lime'],
+        note: 'Prefer light layers',
+      },
+    });
+  });
+
+  it('exposes an inclusive today-through-plus-15 date range', () => {
+    expect(getStyleDateBounds(new Date('2026-08-30T12:00:00'))).toEqual({
+      min: '2026-08-30',
+      max: '2026-09-14',
+    });
+  });
+
+  it('rejects contradictory item selections before the request is sent', () => {
+    expect(() =>
+      buildStyleBatchRequest('casual', 3, 'casual', {
+        scheduledFor: '2026-08-30',
+        requiredItemIds: ['same-id'],
+        excludedItemIds: ['same-id'],
+      }),
+    ).toThrow('required and excluded');
   });
 });

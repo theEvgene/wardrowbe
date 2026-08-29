@@ -417,6 +417,7 @@ export interface Outfit {
   notes?: string | null;
   highlights?: string[];
   weather?: WeatherData;
+  generation_context?: OutfitGenerationContext | null;
   items: OutfitItem[];
   feedback?: FeedbackSummary;
   family_ratings?: FamilyRating[];
@@ -442,6 +443,27 @@ export interface StyleBatchRequest {
   target_style: string;
   count: number;
   occasion: string;
+  scheduled_for?: string;
+  time_of_day?: 'morning' | 'afternoon' | 'evening' | 'night' | 'full day' | null;
+  activity?: string | null;
+  constraints?: {
+    required_item_ids: string[];
+    excluded_item_ids: string[];
+    avoided_colors: string[];
+    note: string | null;
+  };
+}
+
+export interface OutfitGenerationContext {
+  time_of_day?: string | null;
+  activity?: string | null;
+  constraints?: {
+    required_item_ids?: string[];
+    excluded_item_ids?: string[];
+    avoided_colors?: string[];
+    note?: string | null;
+  };
+  applied_preferences?: Record<string, unknown>;
 }
 
 export interface StyleBatchResponse {

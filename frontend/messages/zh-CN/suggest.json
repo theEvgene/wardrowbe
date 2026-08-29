@@ -1,4 +1,30 @@
 {
+  "context": {
+    "activity": "Activity",
+    "activityPlaceholder": "For example: office, walking, dinner",
+    "anyTime": "Any time",
+    "avoidedColors": "Avoided colors",
+    "avoidedColorsPlaceholder": "orange, lime",
+    "date": "Date",
+    "description": "Add the real-world context this outfit must support.",
+    "excludedItems": "Exclude items",
+    "itemRuleCounts": "{required} required, {excluded} excluded",
+    "itemRules": "Item rules",
+    "note": "Additional constraints",
+    "notePlaceholder": "For example: light layers, rain friendly",
+    "requiredItems": "Require items",
+    "timeOfDay": "Time of day",
+    "times": {
+      "afternoon": "Afternoon",
+      "evening": "Evening",
+      "fullDay": "Full day",
+      "morning": "Morning",
+      "night": "Night"
+    },
+    "title": "Generation context",
+    "usedTitle": "Context used for this outfit",
+    "weatherResolution": "Weather for the selected date will be resolved from your saved location when you generate."
+  },
   "dismissOutfit": "关闭穿搭",
   "error": "生成穿搭建议失败，请重试。",
   "detectedStyles": {

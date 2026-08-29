@@ -36,8 +36,9 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { api, setAccessToken } from '@/lib/api';
-import { Outfit, StyleBatchResponse } from '@/lib/types';
+import { Item, Outfit, StyleBatchResponse } from '@/lib/types';
 import { useOccasions } from '@/lib/hooks/use-translated-constants';
 import { useWeather, Weather } from '@/lib/hooks/use-weather';
 import { usePreferences } from '@/lib/hooks/use-preferences';
@@ -45,8 +46,9 @@ import { cn } from '@/lib/utils';
 import { TempUnit, formatTemp, displayValue } from '@/lib/temperature';
 import { DetectedStyleSelector } from '@/components/detected-style-selector';
 import { OutfitCompositePreview } from '@/components/outfit-composite-preview';
-import { buildStyleBatchRequest } from '@/lib/style-outfits';
+import { buildStyleBatchRequest, getStyleDateBounds } from '@/lib/style-outfits';
 import { StyleGenerationError } from '@/components/style-generation-error';
+import { ItemPicker } from '@/components/shared/item-picker';
 
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
@@ -260,6 +262,35 @@ function OutfitResult({
         </div>
       )}
 
+      {outfit.generation_context && (
+        <Card data-testid="generation-context-summary">
+          <CardContent className="p-4 space-y-2 text-sm">
+            <h3 className="font-semibold">{t('context.usedTitle')}</h3>
+            <div className="grid gap-2 sm:grid-cols-2 text-muted-foreground">
+              {outfit.generation_context.time_of_day && (
+                <p><span className="font-medium text-foreground">{t('context.timeOfDay')}:</span> {outfit.generation_context.time_of_day}</p>
+              )}
+              {outfit.generation_context.activity && (
+                <p><span className="font-medium text-foreground">{t('context.activity')}:</span> {outfit.generation_context.activity}</p>
+              )}
+              {!!outfit.generation_context.constraints?.avoided_colors?.length && (
+                <p><span className="font-medium text-foreground">{t('context.avoidedColors')}:</span> {outfit.generation_context.constraints.avoided_colors.join(', ')}</p>
+              )}
+              {outfit.generation_context.constraints?.note && (
+                <p><span className="font-medium text-foreground">{t('context.note')}:</span> {outfit.generation_context.constraints.note}</p>
+              )}
+              <p>
+                <span className="font-medium text-foreground">{t('context.itemRules')}:</span>{' '}
+                {t('context.itemRuleCounts', {
+                  required: outfit.generation_context.constraints?.required_item_ids?.length ?? 0,
+                  excluded: outfit.generation_context.constraints?.excluded_item_ids?.length ?? 0,
+                })}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Outfit Card */}
       <Card className="overflow-hidden">
         <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-4 border-b">
@@ -356,6 +387,14 @@ export default function SuggestPage() {
   const [selectedOccasion, setSelectedOccasion] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
   const [outfitCount, setOutfitCount] = useState(3);
+  const dateBounds = getStyleDateBounds();
+  const [scheduledFor, setScheduledFor] = useState(dateBounds.min);
+  const [timeOfDay, setTimeOfDay] = useState<'morning' | 'afternoon' | 'evening' | 'night' | 'full day' | ''>('');
+  const [activity, setActivity] = useState('');
+  const [requiredItemIds, setRequiredItemIds] = useState<Set<string>>(new Set());
+  const [excludedItemIds, setExcludedItemIds] = useState<Set<string>>(new Set());
+  const [avoidedColors, setAvoidedColors] = useState('');
+  const [contextNote, setContextNote] = useState('');
   const [occasionInitialized, setOccasionInitialized] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [outfits, setOutfits] = useState<Outfit[]>([]);
@@ -380,7 +419,15 @@ export default function SuggestPage() {
     setOutfits([]);
 
     try {
-      const request = buildStyleBatchRequest(selectedStyle, outfitCount, selectedOccasion);
+      const request = buildStyleBatchRequest(selectedStyle, outfitCount, selectedOccasion, {
+        scheduledFor,
+        timeOfDay: timeOfDay || null,
+        activity,
+        requiredItemIds: Array.from(requiredItemIds),
+        excludedItemIds: Array.from(excludedItemIds),
+        avoidedColors: avoidedColors.split(','),
+        note: contextNote,
+      });
       const result = await api.post<StyleBatchResponse>('/outfits/generate-by-style', request);
       setOutfits(result.outfits);
     } catch (err) {
@@ -427,7 +474,42 @@ export default function SuggestPage() {
     setOutfits([]);
     setSelectedOccasion(null);
     setSelectedStyle(null);
+    setScheduledFor(getStyleDateBounds().min);
+    setTimeOfDay('');
+    setActivity('');
+    setRequiredItemIds(new Set());
+    setExcludedItemIds(new Set());
+    setAvoidedColors('');
+    setContextNote('');
     setError(null);
+  };
+
+  const toggleRequiredItem = (item: Item) => {
+    setRequiredItemIds((current) => {
+      const next = new Set(current);
+      if (next.has(item.id)) next.delete(item.id);
+      else next.add(item.id);
+      return next;
+    });
+    setExcludedItemIds((current) => {
+      const next = new Set(current);
+      next.delete(item.id);
+      return next;
+    });
+  };
+
+  const toggleExcludedItem = (item: Item) => {
+    setExcludedItemIds((current) => {
+      const next = new Set(current);
+      if (next.has(item.id)) next.delete(item.id);
+      else next.add(item.id);
+      return next;
+    });
+    setRequiredItemIds((current) => {
+      const next = new Set(current);
+      next.delete(item.id);
+      return next;
+    });
   };
 
   return (
@@ -474,6 +556,95 @@ export default function SuggestPage() {
                 <p className="text-xs text-muted-foreground">{t('outfitCountHint')}</p>
               </div>
 
+              <div className="space-y-4 rounded-lg border p-4">
+                <div>
+                  <h2 className="font-semibold">{t('context.title')}</h2>
+                  <p className="text-xs text-muted-foreground">{t('context.description')}</p>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="scheduled-for">{t('context.date')}</Label>
+                    <Input
+                      id="scheduled-for"
+                      type="date"
+                      min={dateBounds.min}
+                      max={dateBounds.max}
+                      value={scheduledFor}
+                      onChange={(event) => setScheduledFor(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="time-of-day">{t('context.timeOfDay')}</Label>
+                    <select
+                      id="time-of-day"
+                      value={timeOfDay}
+                      onChange={(event) => setTimeOfDay(event.target.value as typeof timeOfDay)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="">{t('context.anyTime')}</option>
+                      <option value="morning">{t('context.times.morning')}</option>
+                      <option value="afternoon">{t('context.times.afternoon')}</option>
+                      <option value="evening">{t('context.times.evening')}</option>
+                      <option value="night">{t('context.times.night')}</option>
+                      <option value="full day">{t('context.times.fullDay')}</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="activity">{t('context.activity')}</Label>
+                  <Input
+                    id="activity"
+                    maxLength={200}
+                    value={activity}
+                    onChange={(event) => setActivity(event.target.value)}
+                    placeholder={t('context.activityPlaceholder')}
+                  />
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <details className="rounded-md border p-3">
+                    <summary className="cursor-pointer font-medium">
+                      {t('context.requiredItems')} ({requiredItemIds.size})
+                    </summary>
+                    <div className="pt-3">
+                      <ItemPicker selectedIds={requiredItemIds} onToggle={toggleRequiredItem} heightClass="h-56" />
+                    </div>
+                  </details>
+                  <details className="rounded-md border p-3">
+                    <summary className="cursor-pointer font-medium">
+                      {t('context.excludedItems')} ({excludedItemIds.size})
+                    </summary>
+                    <div className="pt-3">
+                      <ItemPicker selectedIds={excludedItemIds} onToggle={toggleExcludedItem} heightClass="h-56" />
+                    </div>
+                  </details>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="avoided-colors">{t('context.avoidedColors')}</Label>
+                  <Input
+                    id="avoided-colors"
+                    value={avoidedColors}
+                    onChange={(event) => setAvoidedColors(event.target.value)}
+                    placeholder={t('context.avoidedColorsPlaceholder')}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="context-note">{t('context.note')}</Label>
+                  <Textarea
+                    id="context-note"
+                    maxLength={500}
+                    value={contextNote}
+                    onChange={(event) => setContextNote(event.target.value)}
+                    placeholder={t('context.notePlaceholder')}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">{t('context.weatherResolution')}</p>
+              </div>
+
               {/* Occasion selection */}
               <div className="space-y-3">
                 <h2 className="font-semibold">{t('occasionPrompt')}</h2>
@@ -489,7 +660,7 @@ export default function SuggestPage() {
                   size="lg"
                   className="w-full gap-2"
                   onClick={handleGenerate}
-                  disabled={!selectedOccasion || !selectedStyle || isGenerating}
+                  disabled={!selectedOccasion || !selectedStyle || !weather || isGenerating}
                 >
                   {isGenerating ? (
                     <>
