@@ -49,6 +49,7 @@ import { OutfitCompositePreview } from '@/components/outfit-composite-preview';
 import { buildStyleBatchRequest, getStyleDateBounds } from '@/lib/style-outfits';
 import { StyleGenerationError } from '@/components/style-generation-error';
 import { ItemPicker } from '@/components/shared/item-picker';
+import { OutfitRefinementPanel } from '@/components/outfit-refinement-panel';
 
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
@@ -213,6 +214,7 @@ function OutfitResult({
   onReject,
   onTryAnother,
   onNewRequest,
+  onRefined,
   t,
 }: {
   outfit: Outfit;
@@ -222,6 +224,7 @@ function OutfitResult({
   onReject: () => void;
   onTryAnother: () => void;
   onNewRequest: () => void;
+  onRefined: (outfit: Outfit) => void;
   t: Translator;
 }) {
   return (
@@ -360,6 +363,8 @@ function OutfitResult({
         </CardContent>
       </Card>
 
+      <OutfitRefinementPanel outfit={outfit} onVersionChange={onRefined} />
+
       {/* Action buttons */}
       <div className="flex gap-3 justify-center">
         <Button variant="outline" size="lg" onClick={onTryAnother} className="gap-2">
@@ -468,6 +473,12 @@ export default function SuggestPage() {
     }
 
     setOutfits((current) => current.filter((outfit) => outfit.id !== outfitId));
+  };
+
+  const handleRefined = (sourceId: string, refined: Outfit) => {
+    setOutfits((current) =>
+      current.map((outfit) => (outfit.id === sourceId ? refined : outfit)),
+    );
   };
 
   const handleNewRequest = () => {
@@ -690,6 +701,7 @@ export default function SuggestPage() {
               onReject={() => handleReject(outfit.id)}
               onTryAnother={handleTryAnother}
               onNewRequest={handleNewRequest}
+              onRefined={(refined) => handleRefined(outfit.id, refined)}
               t={t}
             />
           ))}

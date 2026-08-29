@@ -1,5 +1,7 @@
 import { expect, Page, test } from '@playwright/test';
 
+import type { Outfit } from '../lib/types';
+
 const now = '2026-08-26T10:00:00Z';
 const image = (name: string) => `/e2e-${name}.svg`;
 
@@ -168,6 +170,8 @@ async function installApiContract(page: Page) {
   ];
   let wardrobeItems = [source, duplicate, secondShirt, pants, shoes];
   let onboardingCompleted = false;
+  let generatedOutfits: Outfit[] = [];
+  const refinementHistory = new Map<string, Outfit[]>();
 
   await page.route('**/api/auth/session', (route) =>
     route.fulfill({
@@ -298,16 +302,48 @@ async function installApiContract(page: Page) {
         precipitation_chance: 20,
         condition: 'partly cloudy',
       };
+      generatedOutfits = [firstStyleOutfit, secondStyleOutfit].map(
+        (outfit) => ({
+          ...outfit,
+          source: 'on_demand',
+          status: 'pending',
+          scheduled_for: payload.scheduled_for,
+          generation_context: context,
+          weather,
+        }),
+      );
+      for (const outfit of generatedOutfits) refinementHistory.set(outfit.id, [outfit]);
       return route.fulfill({
         json: {
-          outfits: [firstStyleOutfit, secondStyleOutfit].map((outfit) => ({
-            ...outfit,
-            scheduled_for: payload.scheduled_for,
-            generation_context: context,
-            weather,
-          })),
+          outfits: generatedOutfits,
         },
       });
+    }
+    const historyMatch = path.match(/^\/outfits\/([^/]+)\/refinement-history$/);
+    if (historyMatch && method === 'GET') {
+      return route.fulfill({ json: { outfits: refinementHistory.get(historyMatch[1]) ?? [] } });
+    }
+    if (path === `/outfits/${firstStyleOutfit.id}/refine` && method === 'POST') {
+      expect(request.postDataJSON()).toEqual({ instruction: 'Make it more relaxed' });
+      const original = generatedOutfits.find((outfit) => outfit.id === firstStyleOutfit.id)!;
+      const refined = {
+        ...original,
+        id: 'style-outfit-1-refined',
+        replaces_outfit_id: original.id,
+        reasoning: 'Swapped the shirt for a more relaxed version.',
+        items: secondStyleOutfit.items,
+        generation_context: {
+          ...original.generation_context,
+          refinement: {
+            instruction: 'Make it more relaxed',
+            turn: 1,
+            root_outfit_id: original.id,
+            parent_outfit_id: original.id,
+          },
+        },
+      };
+      refinementHistory.set(refined.id, [original, refined]);
+      return route.fulfill({ status: 201, json: refined });
     }
     if (path === `/items/${source.id}/remove-background` && method === 'POST') {
       expect(request.postDataJSON()).toMatchObject({ mode: 'garment' });
@@ -416,5 +452,16 @@ test('user reaches a cutout-based composite outfit through the browser happy pat
   await expect(page.getByTestId('generation-context-summary').first()).toContainText('Dinner and a walk');
   await expect(page.getByTestId('generation-context-summary').first()).toContainText('orange, lime');
   await expect(page.getByTestId('generation-context-summary').first()).toContainText('1 required, 1 excluded');
+  await expect(page.getByTestId('outfit-refinement-panel')).toHaveCount(2);
+  const stylist = page.getByTestId('outfit-refinement-panel').first();
+  await stylist.getByLabel('Tell the stylist what to change').fill('Make it more relaxed');
+  await stylist.getByRole('button', { name: 'Refine outfit' }).click();
+  await expect(page.getByTestId('outfit-refinement-panel').first()).toContainText(
+    'Make it more relaxed',
+  );
+  await expect(page.getByTestId('outfit-refinement-panel').first()).toContainText(
+    'Swapped the shirt for a more relaxed version.',
+  );
+  await expect(page.getByTestId(`outfit-item-${secondShirt.id}`).first()).toBeVisible();
   assertCleanBrowserContract();
 });

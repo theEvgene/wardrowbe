@@ -31,6 +31,7 @@ import { toast } from 'sonner';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { OutfitCompositePreview } from '@/components/outfit-composite-preview';
+import { OutfitRefinementPanel } from '@/components/outfit-refinement-panel';
 
 interface OutfitPreviewDialogProps {
   outfit: Outfit;
@@ -39,7 +40,7 @@ interface OutfitPreviewDialogProps {
   isOwner?: boolean;
 }
 
-export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: OutfitPreviewDialogProps) {
+export function OutfitPreviewDialog({ outfit: initialOutfit, open, onClose, isOwner = true }: OutfitPreviewDialogProps) {
   const t = useTranslations('suggest.outfitPreview');
   const ts = useTranslations('suggest');
   const tc = useTranslations('common');
@@ -47,6 +48,7 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
   const [imageKey, setImageKey] = useState(0); // Force image reload after rotation
   const [showRatingForm, setShowRatingForm] = useState(false);
   const [viewMode, setViewMode] = useState<'composite' | 'item'>('composite');
+  const [outfit, setOutfit] = useState(initialOutfit);
   const items = outfit.items;
   const rotateImage = useRotateImage();
   const { data: session } = useSession();
@@ -60,10 +62,11 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
 
   useEffect(() => {
     if (open) {
+      setOutfit(initialOutfit);
       setViewMode('composite');
       setCurrentIndex(0);
     }
-  }, [open, outfit.id]);
+  }, [open, initialOutfit]);
 
   const currentItem = items[currentIndex];
 
@@ -315,6 +318,12 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
                   </p>
                 </div>
               )}
+            </div>
+          )}
+
+          {isOwner && (
+            <div className="border-t p-4">
+              <OutfitRefinementPanel outfit={outfit} onVersionChange={setOutfit} />
             </div>
           )}
 

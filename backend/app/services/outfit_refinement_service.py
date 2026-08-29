@@ -75,6 +75,7 @@ class OutfitRefinementService:
         candidates: list[ClothingItem],
         instruction: str,
         validation_errors: list[str],
+        valid_number_sets: list[list[int]],
     ) -> str:
         current_ids = {row.item_id for row in source.items}
         lines = []
@@ -106,6 +107,9 @@ class OutfitRefinementService:
             "repeat an item, or occupy one body slot twice. The result must differ from the "
             "current outfit by at least one item.\n"
             f"CURRENT ITEM NUMBERS: {json.dumps(current_numbers)}\n"
+            f"VALID CHANGED ITEM SETS: {json.dumps(valid_number_sets)}\n"
+            "Copy exactly one VALID CHANGED ITEM SET into the response items field without "
+            "adding, removing, or repeating numbers.\n"
             f"REFINEMENT CONTEXT: {json.dumps(context, sort_keys=True, ensure_ascii=False)}"
             f"{repair}\n"
             'Return JSON only: {"outfit":{"items":[1,2,3],"headline":"...",'
@@ -135,6 +139,54 @@ class OutfitRefinementService:
         require_internal_ai("text")
         source = await self._owned_outfit(outfit_id, user.id)
         candidates = await self._candidates(user.id)
+        constraints = (source.generation_context or {}).get("constraints") or {}
+        applied_preferences = (source.generation_context or {}).get("applied_preferences") or {}
+        try:
+            required_ids = {UUID(value) for value in constraints.get("required_item_ids", [])}
+            excluded_ids = {
+                UUID(value)
+                for value in [
+                    *constraints.get("excluded_item_ids", []),
+                    *applied_preferences.get("excluded_item_ids", []),
+                ]
+            }
+        except (TypeError, ValueError):
+            raise OutfitRefinementError(
+                "invalid_generation_context", "Outfit item constraints are invalid"
+            ) from None
+        avoided_colors = {
+            value.strip().lower()
+            for value in [
+                *constraints.get("avoided_colors", []),
+                *applied_preferences.get("color_avoid", []),
+            ]
+            if isinstance(value, str) and value.strip()
+        }
+        candidate_ids = {item.id for item in candidates}
+        if not required_ids <= candidate_ids:
+            raise OutfitRefinementError(
+                "constraint_item_unavailable",
+                "A required item is no longer an active canonical wardrobe item",
+            )
+
+        def item_colors(item: ClothingItem) -> set[str]:
+            return {
+                value.strip().lower()
+                for value in [item.primary_color, *(item.colors or [])]
+                if value and value.strip()
+            }
+
+        if required_ids & excluded_ids or any(
+            item.id in required_ids and item_colors(item) & avoided_colors for item in candidates
+        ):
+            raise OutfitRefinementError(
+                "constraint_conflict", "A required item conflicts with retained outfit constraints"
+            )
+        candidates = [
+            item
+            for item in candidates
+            if item.id not in excluded_ids and not (item_colors(item) & avoided_colors)
+        ]
         if not StyleOutfitService._valid_core_number_sets(candidates):
             raise OutfitRefinementError(
                 "insufficient_wardrobe",
@@ -150,17 +202,52 @@ class OutfitRefinementService:
         )
         number_map = dict(enumerate(candidates, 1))
         source_ids = {row.item_id for row in source.items}
+        number_by_id = {item.id: number for number, item in number_map.items()}
+        required_numbers = {number_by_id[item_id] for item_id in required_ids}
+        valid_number_sets: list[list[int]] = []
+        for core_set in StyleOutfitService._valid_core_number_sets(candidates):
+            proposed = [
+                *core_set,
+                *(number for number in required_numbers if number not in core_set),
+            ]
+            try:
+                selected = StyleOutfitService._validate_selection({"items": proposed}, number_map)
+            except AIRecommendationError:
+                continue
+            if {item.id for item in selected} == source_ids:
+                continue
+            if proposed not in valid_number_sets:
+                valid_number_sets.append(proposed)
+        if not valid_number_sets:
+            raise OutfitRefinementError(
+                "insufficient_wardrobe",
+                "No complete changed outfit satisfies the retained constraints",
+            )
         validation_errors: list[str] = []
         accepted = None
 
         for _attempt in range(MAX_REFINEMENT_ATTEMPTS):
             try:
                 result = await ai_service.generate_text(
-                    self._prompt(source, candidates, instruction, validation_errors),
+                    self._prompt(
+                        source,
+                        candidates,
+                        instruction,
+                        validation_errors,
+                        valid_number_sets,
+                    ),
                     return_metadata=True,
                 )
                 proposal = StyleOutfitService._validated_proposal(self._parse(result.content))
                 selected = StyleOutfitService._validate_selection(proposal, number_map)
+                if frozenset(number_by_id[item.id] for item in selected) not in {
+                    frozenset(valid_set) for valid_set in valid_number_sets
+                }:
+                    raise AIRecommendationError(
+                        "Refinement did not use an allowed complete changed item set"
+                    )
+                if not required_ids <= {item.id for item in selected}:
+                    raise AIRecommendationError("Refinement omitted a required wardrobe item")
                 if {item.id for item in selected} == source_ids:
                     raise AIRecommendationError("Refinement did not change any outfit item")
                 accepted = (proposal, selected, result.model, result.endpoint)

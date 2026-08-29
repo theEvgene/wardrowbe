@@ -94,6 +94,20 @@
     "title": "{occasion} 穿搭",
     "viewItemDetails": "查看單品詳情"
   },
+  "refinement": {
+    "description": "提出修改要求，每次回覆都會建立新的穿搭版本。",
+    "error": "無法調整這套穿搭，請重試。",
+    "instruction": "告訴造型師需要修改什麼",
+    "original": "原始穿搭",
+    "placeholder": "例如：更休閒一些，或更換鞋子",
+    "stylist": "造型師",
+    "submit": "調整穿搭",
+    "submitting": "正在調整…",
+    "title": "與造型師一起調整",
+    "updated": "已建立新的穿搭版本。",
+    "version": "版本 {number}",
+    "you": "你"
+  },
   "retryGeneration": "重新生成",
   "startOver": "重新開始",
   "subtitle": "為你的一天找到完美穿搭",

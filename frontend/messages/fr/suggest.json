@@ -94,6 +94,20 @@
     "title": "Tenue {occasion}",
     "viewItemDetails": "Voir les détails de l'article"
   },
+  "refinement": {
+    "description": "Demandez une modification. Chaque réponse crée une nouvelle version de la tenue.",
+    "error": "Impossible d’ajuster cette tenue. Veuillez réessayer.",
+    "instruction": "Indiquez au styliste ce qu’il faut changer",
+    "original": "Tenue d’origine",
+    "placeholder": "Par exemple : plus décontractée ou changer les chaussures",
+    "stylist": "Styliste",
+    "submit": "Ajuster la tenue",
+    "submitting": "Ajustement…",
+    "title": "Affiner avec votre styliste",
+    "updated": "Une nouvelle version de la tenue a été créée.",
+    "version": "Version {number}",
+    "you": "Vous"
+  },
   "retryGeneration": "Relancer la génération",
   "startOver": "Recommencer",
   "subtitle": "Trouvons la tenue parfaite pour votre journée",

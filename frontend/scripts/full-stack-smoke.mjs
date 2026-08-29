@@ -435,6 +435,68 @@ try {
   await page.getByTestId('outfit-composite').first().waitFor();
   assert.equal(await page.getByTestId('outfit-composite').count(), 2);
 
+  const originalGenerated = generatedBatch.outfits[0];
+  const originalItemIds = originalGenerated.items.map((item) => item.id).sort();
+  let currentVersion = originalGenerated;
+  const refinementInstructions = [
+    'Change the shirt and make the outfit more relaxed',
+    'Change the shirt again and keep it relaxed',
+  ];
+  for (const [index, instruction] of refinementInstructions.entries()) {
+    const panel = page.getByTestId('outfit-refinement-panel').first();
+    await panel.getByLabel('Tell the stylist what to change').fill(instruction);
+    const [refinementResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes(`/api/v1/outfits/${currentVersion.id}/refine`) &&
+          response.request().method() === 'POST',
+        { timeout: 5 * 60_000 },
+      ),
+      panel.getByRole('button', { name: 'Refine outfit' }).click(),
+    ]);
+    const refined = await refinementResponse.json();
+    assert.equal(
+      refinementResponse.ok(),
+      true,
+      `Real refinement failed: ${refinementResponse.status()} ${JSON.stringify(refined)}`,
+    );
+    outfitIds.push(refined.id);
+    assert.equal(refined.replaces_outfit_id, currentVersion.id);
+    assert.equal(refined.generation_context?.refinement?.turn, index + 1);
+    assert.equal(
+      refined.generation_context?.refinement?.root_outfit_id,
+      originalGenerated.id,
+    );
+    assert.equal(refined.generation_context?.refinement?.instruction, instruction);
+    assert.equal(refined.generation_context?.activity, 'Dinner and a walk');
+    assert.deepEqual(refined.weather, weatherSnapshot);
+    assert.ok(refined.items.some((item) => item.id === shoes.id));
+    assert.ok(refined.items.every((item) => activeItemIds.has(item.id)));
+    assert.notDeepEqual(
+      refined.items.map((item) => item.id).sort(),
+      currentVersion.items.map((item) => item.id).sort(),
+      'Refinement returned an unchanged outfit',
+    );
+    currentVersion = refined;
+  }
+  await page.getByTestId('outfit-refinement-panel').first().getByText(refinementInstructions[0]).waitFor();
+  await page.getByTestId('outfit-refinement-panel').first().getByText(refinementInstructions[1]).waitFor();
+  await page.getByTestId('outfit-composite').first().waitFor();
+
+  const history = await api(`/outfits/${currentVersion.id}/refinement-history`);
+  assert.equal(history.ok, true, `Refinement history failed: ${history.status}`);
+  assert.deepEqual(
+    history.body.outfits.map((outfit) => outfit.id),
+    [originalGenerated.id, ...outfitIds.slice(-2)],
+  );
+  const unchangedOriginal = await api(`/outfits/${originalGenerated.id}`);
+  assert.equal(unchangedOriginal.ok, true);
+  assert.deepEqual(
+    unchangedOriginal.body.items.map((item) => item.id).sort(),
+    originalItemIds,
+    'Original Outfit was mutated by refinement',
+  );
+
   assert.deepEqual(pageErrors, [], `Browser errors: ${pageErrors.join('; ')}`);
   console.log(
     JSON.stringify({
@@ -456,6 +518,8 @@ try {
       activity: generationRequest.activity,
       required_item_id: shoes.id,
       forecast_condition: weatherSnapshot.condition,
+      refinement_turns: refinementInstructions.length,
+      refinement_history_versions: history.body.outfits.length,
     }),
   );
 } finally {

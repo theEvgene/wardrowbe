@@ -94,6 +94,20 @@
     "title": "{occasion} Outfit",
     "viewItemDetails": "View item details"
   },
+  "refinement": {
+    "description": "Ask for a change. Every reply creates a new outfit version.",
+    "error": "Could not refine this outfit. Please try again.",
+    "instruction": "Tell the stylist what to change",
+    "original": "Original outfit",
+    "placeholder": "For example: make it more relaxed or swap the shoes",
+    "stylist": "Stylist",
+    "submit": "Refine outfit",
+    "submitting": "Refining…",
+    "title": "Refine with your stylist",
+    "updated": "Created an updated outfit version.",
+    "version": "Version {number}",
+    "you": "You"
+  },
   "retryGeneration": "Retry generation",
   "startOver": "Start over",
   "subtitle": "Let's find the perfect outfit for your day",

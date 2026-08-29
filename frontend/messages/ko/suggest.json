@@ -94,6 +94,20 @@
     "title": "{occasion} 코디",
     "viewItemDetails": "아이템 상세보기"
   },
+  "refinement": {
+    "description": "변경을 요청하면 답변마다 새로운 코디 버전이 만들어집니다.",
+    "error": "이 코디를 수정하지 못했습니다. 다시 시도해 주세요.",
+    "instruction": "스타일리스트에게 바꿀 내용을 알려 주세요",
+    "original": "원래 코디",
+    "placeholder": "예: 더 편안하게 하거나 신발을 바꿔 주세요",
+    "stylist": "스타일리스트",
+    "submit": "코디 수정",
+    "submitting": "수정 중…",
+    "title": "스타일리스트와 코디 다듬기",
+    "updated": "새로운 코디 버전을 만들었습니다.",
+    "version": "버전 {number}",
+    "you": "나"
+  },
   "retryGeneration": "다시 생성",
   "startOver": "처음부터 다시",
   "subtitle": "오늘 하루에 딱 맞는 코디를 찾아볼까요",

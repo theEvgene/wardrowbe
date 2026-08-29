@@ -943,6 +943,9 @@ async def refine_outfit(
         status_code = {
             "outfit_not_found": status.HTTP_404_NOT_FOUND,
             "insufficient_wardrobe": status.HTTP_400_BAD_REQUEST,
+            "constraint_item_unavailable": status.HTTP_400_BAD_REQUEST,
+            "constraint_conflict": status.HTTP_400_BAD_REQUEST,
+            "invalid_generation_context": status.HTTP_400_BAD_REQUEST,
             "refinement_failed": status.HTTP_503_SERVICE_UNAVAILABLE,
         }.get(exc.code, status.HTTP_409_CONFLICT)
         raise HTTPException(

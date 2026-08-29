@@ -104,8 +104,12 @@ async def create_source_outfit(db: AsyncSession, user: User):
             ("shirt", "Alternate shirt"),
             ("pants", "Pants"),
             ("shoes", "Shoes"),
+            ("shoes", "Forbidden orange shoes"),
         ]
     ]
+    for item in items:
+        item.primary_color = "orange" if item.name == "Forbidden orange shoes" else "blue"
+        item.colors = [item.primary_color]
     db.add_all(items)
     await db.flush()
     source = Outfit(
@@ -117,7 +121,12 @@ async def create_source_outfit(db: AsyncSession, user: User):
         generation_context={
             "time_of_day": "evening",
             "activity": "Dinner and a walk",
-            "constraints": {"note": "Keep it rain friendly"},
+            "constraints": {
+                "required_item_ids": [str(items[3].id)],
+                "excluded_item_ids": [],
+                "avoided_colors": ["orange"],
+                "note": "Keep it rain friendly",
+            },
         },
         source=OutfitSource.on_demand,
         status=OutfitStatus.pending,
@@ -166,6 +175,7 @@ async def test_refinement_creates_immutable_successor_and_history(
         str(items[2].id),
         str(items[3].id),
     }
+    assert all(entry["primary_color"] != "orange" for entry in refined["items"])
 
     original = await client.get(f"/api/v1/outfits/{source.id}", headers=auth_headers)
     assert original.status_code == 200

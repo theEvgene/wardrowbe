@@ -94,6 +94,20 @@
     "title": "Outfit {occasion}",
     "viewItemDetails": "Vedi dettagli capo"
   },
+  "refinement": {
+    "description": "Chiedi una modifica. Ogni risposta crea una nuova versione dell’outfit.",
+    "error": "Impossibile modificare questo outfit. Riprova.",
+    "instruction": "Spiega allo stylist cosa cambiare",
+    "original": "Outfit originale",
+    "placeholder": "Ad esempio: rendilo più casual o cambia le scarpe",
+    "stylist": "Stylist",
+    "submit": "Modifica outfit",
+    "submitting": "Modifica in corso…",
+    "title": "Perfeziona con il tuo stylist",
+    "updated": "È stata creata una nuova versione dell’outfit.",
+    "version": "Versione {number}",
+    "you": "Tu"
+  },
   "retryGeneration": "Genera di nuovo",
   "startOver": "Ricomincia",
   "subtitle": "Troviamo l'outfit perfetto per la tua giornata",

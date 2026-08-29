@@ -94,6 +94,20 @@
     "title": "{occasion}コーデ",
     "viewItemDetails": "アイテム詳細を見る"
   },
+  "refinement": {
+    "description": "変更を依頼すると、回答ごとに新しいコーデ版が作成されます。",
+    "error": "コーデを調整できませんでした。もう一度お試しください。",
+    "instruction": "変更したい内容をスタイリストに伝える",
+    "original": "元のコーデ",
+    "placeholder": "例：もっとカジュアルに、靴を替えて",
+    "stylist": "スタイリスト",
+    "submit": "コーデを調整",
+    "submitting": "調整中…",
+    "title": "スタイリストとコーデを調整",
+    "updated": "新しいコーデ版を作成しました。",
+    "version": "バージョン {number}",
+    "you": "あなた"
+  },
   "retryGeneration": "もう一度生成",
   "startOver": "最初から",
   "subtitle": "今日にぴったりのコーデを見つけましょう",

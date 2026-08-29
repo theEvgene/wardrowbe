@@ -404,25 +404,26 @@ export type OutfitSource = 'scheduled' | 'on_demand' | 'manual' | 'pairing' | 'e
 
 export interface Outfit {
   id: string;
+  replaces_outfit_id?: string | null;
   occasion: string;
   target_style?: string | null;
   scheduled_for: string;
-  status: 'pending' | 'sent' | 'viewed' | 'accepted' | 'rejected' | 'expired';
+  status: 'pending' | 'sent' | 'viewed' | 'accepted' | 'rejected' | 'skipped' | 'expired';
   source: OutfitSource;
-  reasoning?: string;
-  style_notes?: string;
+  reasoning?: string | null;
+  style_notes?: string | null;
   season?: string | null;
   formality?: string | null;
   palette?: string[] | null;
   notes?: string | null;
-  highlights?: string[];
-  weather?: WeatherData;
+  highlights?: string[] | null;
+  weather?: WeatherData | null;
   generation_context?: OutfitGenerationContext | null;
   items: OutfitItem[];
-  feedback?: FeedbackSummary;
-  family_ratings?: FamilyRating[];
-  family_rating_average?: number;
-  family_rating_count?: number;
+  feedback?: FeedbackSummary | null;
+  family_ratings?: FamilyRating[] | null;
+  family_rating_average?: number | null;
+  family_rating_count?: number | null;
   created_at: string;
 }
 
@@ -464,6 +465,12 @@ export interface OutfitGenerationContext {
     note?: string | null;
   };
   applied_preferences?: Record<string, unknown>;
+  refinement?: {
+    instruction: string;
+    turn: number;
+    root_outfit_id: string;
+    parent_outfit_id: string;
+  };
 }
 
 export interface StyleBatchResponse {
