@@ -271,10 +271,43 @@ async function installApiContract(page: Page) {
       return route.fulfill({ json: {} });
     }
     if (path === '/outfits/generate-by-style' && method === 'POST') {
-      expect(request.postDataJSON()).toEqual({
-        target_style: 'casual', count: 2, occasion: 'casual',
+      const payload = request.postDataJSON();
+      expect(payload).toEqual({
+        target_style: 'casual',
+        count: 2,
+        occasion: 'casual',
+        scheduled_for: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        time_of_day: 'evening',
+        activity: 'Dinner and a walk',
+        constraints: {
+          required_item_ids: [shoes.id],
+          excluded_item_ids: [duplicate.id],
+          avoided_colors: ['orange', 'lime'],
+          note: 'Keep it rain friendly',
+        },
       });
-      return route.fulfill({ json: { outfits: [firstStyleOutfit, secondStyleOutfit] } });
+      const context = {
+        time_of_day: payload.time_of_day,
+        activity: payload.activity,
+        constraints: payload.constraints,
+      };
+      const weather = {
+        temperature: 18,
+        feels_like: 17,
+        humidity: 60,
+        precipitation_chance: 20,
+        condition: 'partly cloudy',
+      };
+      return route.fulfill({
+        json: {
+          outfits: [firstStyleOutfit, secondStyleOutfit].map((outfit) => ({
+            ...outfit,
+            scheduled_for: payload.scheduled_for,
+            generation_context: context,
+            weather,
+          })),
+        },
+      });
     }
     if (path === `/items/${source.id}/remove-background` && method === 'POST') {
       expect(request.postDataJSON()).toMatchObject({ mode: 'garment' });
@@ -365,9 +398,23 @@ test('user reaches a cutout-based composite outfit through the browser happy pat
   await page.goto('/dashboard/suggest');
   await page.locator('button[aria-pressed]').filter({ hasText: 'casual' }).click();
   await page.getByLabel('Number of outfits').fill('2');
+  const dateInput = page.getByLabel('Date');
+  await expect(dateInput).toHaveAttribute('min', /^\d{4}-\d{2}-\d{2}$/);
+  await expect(dateInput).toHaveAttribute('max', /^\d{4}-\d{2}-\d{2}$/);
+  await page.getByLabel('Time of day').selectOption('evening');
+  await page.getByLabel('Activity').fill('Dinner and a walk');
+  await page.getByText('Require items (0)').click();
+  await page.getByRole('button').filter({ has: page.getByRole('img', { name: shoes.name }) }).last().click();
+  await page.getByText('Exclude items (0)').click();
+  await page.getByRole('button').filter({ has: page.getByRole('img', { name: duplicate.name }) }).last().click();
+  await page.getByLabel('Avoided colors').fill(' Orange, orange, LIME ');
+  await page.getByLabel('Additional constraints').fill('Keep it rain friendly');
   await page.locator('button[data-selected]').filter({ hasText: 'Casual' }).click();
   await page.getByRole('button', { name: 'Get Suggestion' }).click();
 
   await expect(page.getByTestId('outfit-composite')).toHaveCount(2);
+  await expect(page.getByTestId('generation-context-summary').first()).toContainText('Dinner and a walk');
+  await expect(page.getByTestId('generation-context-summary').first()).toContainText('orange, lime');
+  await expect(page.getByTestId('generation-context-summary').first()).toContainText('1 required, 1 excluded');
   assertCleanBrowserContract();
 });
