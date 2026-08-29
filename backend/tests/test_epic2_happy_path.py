@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -8,6 +9,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.ai_service import ClothingTags
+from app.services.weather_service import WeatherData
 from app.workers import garment_extraction, tagging
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "garment_extraction"
@@ -50,6 +52,7 @@ async def test_upload_tag_extract_detect_style_and_persist_exact_batch(
     auth_headers,
     db_session: AsyncSession,
     monkeypatch,
+    test_user,
 ) -> None:
     item_types = ["shirt", "shirt", "pants", "pants", "shoes", "shoes"]
     fixture_names = [
@@ -163,6 +166,26 @@ async def test_upload_tag_extract_detect_style_and_persist_exact_batch(
     assert styles.status_code == 200, styles.text
     assert styles.json() == {"styles": [{"style": "casual", "item_count": 6}]}
 
+    test_user.location_lat = 55.75
+    test_user.location_lon = 37.62
+
+    class DeterministicWeather:
+        async def get_current_weather(self, latitude: float, longitude: float) -> WeatherData:
+            return WeatherData(
+                temperature=18,
+                feels_like=17,
+                humidity=60,
+                precipitation_chance=10,
+                precipitation_mm=0,
+                wind_speed=5,
+                condition="partly cloudy",
+                condition_code=2,
+                is_day=True,
+                uv_index=2,
+                timestamp=datetime(2026, 8, 30, 12),
+            )
+
+    monkeypatch.setattr("app.api.outfits.WeatherService", DeterministicWeather)
     monkeypatch.setattr("app.services.style_outfit_service.AIService", PromptAwareStyleAI)
     generated = await client.post(
         "/api/v1/outfits/generate-by-style",
