@@ -47,6 +47,8 @@
   },
   "loveIt": "Gefällt mir",
   "occasionPrompt": "Was ist der Anlass?",
+  "outfitCount": "Anzahl der Outfits",
+  "outfitCountHint": "Wähle zwischen 1 und 20. Standard ist 3.",
   "outfitPreview": {
     "familyRatings": {
       "average": "({rating} <star></star> Ø)",

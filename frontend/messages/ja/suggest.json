@@ -47,6 +47,8 @@
   },
   "loveIt": "最高",
   "occasionPrompt": "どんなシーンですか？",
+  "outfitCount": "コーディネート数",
+  "outfitCountHint": "1〜20から選択できます。初期値は3です。",
   "outfitPreview": {
     "familyRatings": {
       "average": "（平均 {rating} <star></star>）",

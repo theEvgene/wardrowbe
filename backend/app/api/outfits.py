@@ -39,6 +39,7 @@ from app.services.studio_service import (
     OutfitWornImmutableError,
     StudioService,
 )
+from app.services.style_outfit_service import StyleOutfitService
 from app.services.suggestion_cache import clear_suggestions
 from app.services.weather_service import WeatherData
 from app.utils.auth import get_current_user
@@ -113,6 +114,26 @@ class SuggestRequest(BaseModel):
     weather_override: WeatherOverrideRequest | None = None
     exclude_items: list[UUID] = Field(default_factory=list, description="Items to exclude")
     include_items: list[UUID] = Field(default_factory=list, description="Items to include")
+
+
+class StyleBatchRequest(BaseModel):
+    target_style: str = Field(min_length=1, max_length=50)
+    count: int = Field(default=3, ge=1, le=20)
+    occasion: str = Field(default="casual", max_length=50)
+
+    @field_validator("target_style", "occasion")
+    @classmethod
+    def normalize_text(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @field_validator("occasion")
+    @classmethod
+    def validate_style_occasion(cls, value: str) -> str:
+        if value not in VALID_OCCASIONS:
+            raise ValueError(
+                f"Invalid occasion '{value}'. Must be one of: {', '.join(sorted(VALID_OCCASIONS))}"
+            )
+        return value
 
 
 class OutfitItemResponse(BaseModel):
@@ -190,6 +211,7 @@ class FamilyRatingResponse(BaseModel):
 class OutfitResponse(BaseModel):
     id: UUID
     occasion: str
+    target_style: str | None = None
     scheduled_for: date | None = None
     status: str
     name: str | None = None
@@ -219,6 +241,10 @@ class OutfitListResponse(BaseModel):
     page: int
     page_size: int
     has_more: bool
+
+
+class StyleBatchResponse(BaseModel):
+    outfits: list[OutfitResponse]
 
 
 class BulkOutfitFilters(BaseModel):
@@ -411,6 +437,7 @@ def outfit_to_response(
     return OutfitResponse(
         id=outfit.id,
         occasion=outfit.occasion,
+        target_style=outfit.target_style,
         scheduled_for=outfit.scheduled_for,
         status=outfit.status.value,
         name=outfit.name,
@@ -505,6 +532,49 @@ async def suggest_outfit(
 
     wore_instead_map = await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
     return outfit_to_response(outfit, wore_instead_map, is_starter_suggestion=is_starter)
+
+
+@router.post("/generate-by-style", response_model=StyleBatchResponse)
+async def generate_outfits_by_style(
+    request: StyleBatchRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> StyleBatchResponse:
+    await rate_limit_by_user(str(current_user.id), "style-batch", max_requests=5, window_seconds=60)
+    try:
+        outfits = await StyleOutfitService(db).generate(
+            user=current_user,
+            target_style=request.target_style,
+            count=request.count,
+            occasion=request.occasion,
+        )
+    except InsufficientWardrobeError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
+    except AIDisabledError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Internal AI is disabled; style outfit generation is unavailable.",
+        ) from None
+    except AIRecommendationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
+
+    item_service = ItemService(db)
+    is_starter = await item_service.get_ready_item_count(current_user.id) <= 5
+    wore_instead_map = await fetch_wore_instead_items_map(db, outfits, user_id=current_user.id)
+    return StyleBatchResponse(
+        outfits=[
+            outfit_to_response(
+                outfit,
+                wore_instead_map,
+                is_starter_suggestion=is_starter,
+            )
+            for outfit in outfits
+        ]
+    )
 
 
 class SuggestionCreateRequest(OutfitAttributeFields):

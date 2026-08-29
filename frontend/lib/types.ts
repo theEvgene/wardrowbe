@@ -405,6 +405,7 @@ export type OutfitSource = 'scheduled' | 'on_demand' | 'manual' | 'pairing' | 'e
 export interface Outfit {
   id: string;
   occasion: string;
+  target_style?: string | null;
   scheduled_for: string;
   status: 'pending' | 'sent' | 'viewed' | 'accepted' | 'rejected' | 'expired';
   source: OutfitSource;
@@ -435,6 +436,16 @@ export interface SuggestRequest {
   };
   exclude_items?: string[];
   include_items?: string[];
+}
+
+export interface StyleBatchRequest {
+  target_style: string;
+  count: number;
+  occasion: string;
+}
+
+export interface StyleBatchResponse {
+  outfits: Outfit[];
 }
 
 // Pairing types

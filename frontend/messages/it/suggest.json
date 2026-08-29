@@ -47,6 +47,8 @@
   },
   "loveIt": "Mi piace",
   "occasionPrompt": "Qual è l'occasione?",
+  "outfitCount": "Numero di outfit",
+  "outfitCountHint": "Scegli tra 1 e 20. Il valore predefinito è 3.",
   "outfitPreview": {
     "familyRatings": {
       "average": "({rating} <star></star> media)",

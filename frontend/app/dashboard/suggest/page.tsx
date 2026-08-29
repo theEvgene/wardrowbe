@@ -37,19 +37,23 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { api, ApiError, setAccessToken } from '@/lib/api';
-import { Outfit, SuggestRequest } from '@/lib/types';
+import { Outfit, StyleBatchResponse } from '@/lib/types';
 import { useOccasions } from '@/lib/hooks/use-translated-constants';
 import { useWeather, Weather } from '@/lib/hooks/use-weather';
 import { usePreferences } from '@/lib/hooks/use-preferences';
 import { cn } from '@/lib/utils';
 import { TempUnit, formatTemp, displayValue, toF, toCelsius } from '@/lib/temperature';
 import { DetectedStyleSelector } from '@/components/detected-style-selector';
+import { OutfitCompositePreview } from '@/components/outfit-composite-preview';
+import { buildStyleBatchRequest } from '@/lib/style-outfits';
 
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
@@ -383,6 +387,7 @@ function OutfitResult({
           )}
         </div>
         <CardContent className="p-4">
+          <OutfitCompositePreview items={outfit.items} className="mx-auto max-w-md" />
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {outfit.items.map((item) => (
               <Link
@@ -455,10 +460,11 @@ export default function SuggestPage() {
   const temperatureUnit: TempUnit = prefs?.temperature_unit === 'fahrenheit' ? 'fahrenheit' : 'celsius';
   const [selectedOccasion, setSelectedOccasion] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
+  const [outfitCount, setOutfitCount] = useState(3);
   const [occasionInitialized, setOccasionInitialized] = useState(false);
   const [weatherOverride, setWeatherOverride] = useState<WeatherOverride | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [outfit, setOutfit] = useState<Outfit | null>(null);
+  const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -469,7 +475,7 @@ export default function SuggestPage() {
   }, [prefs, occasionInitialized, selectedOccasion]);
 
   const handleGenerate = async () => {
-    if (!selectedOccasion) return;
+    if (!selectedOccasion || !selectedStyle) return;
 
     if (session?.accessToken) {
       setAccessToken(session.accessToken as string);
@@ -479,22 +485,9 @@ export default function SuggestPage() {
     setError(null);
 
     try {
-      const request: SuggestRequest = {
-        occasion: selectedOccasion,
-      };
-
-      if (weatherOverride) {
-        request.weather_override = {
-          temperature: weatherOverride.temperature,
-          feels_like: weatherOverride.temperature,
-          humidity: 50,
-          precipitation_chance: weatherOverride.condition === 'rainy' ? 80 : weatherOverride.condition === 'cloudy' ? 30 : 10,
-          condition: weatherOverride.condition,
-        };
-      }
-
-      const result = await api.post<Outfit>('/outfits/suggest', request);
-      setOutfit(result);
+      const request = buildStyleBatchRequest(selectedStyle, outfitCount, selectedOccasion);
+      const result = await api.post<StyleBatchResponse>('/outfits/generate-by-style', request);
+      setOutfits(result.outfits);
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -507,47 +500,42 @@ export default function SuggestPage() {
     }
   };
 
-  const handleAccept = async () => {
-    if (!outfit) return;
-
+  const handleAccept = async (outfitId: string) => {
     if (session?.accessToken) {
       setAccessToken(session.accessToken as string);
     }
 
     try {
-      await api.post(`/outfits/${outfit.id}/accept`);
-      setOutfit(null);
-      setSelectedOccasion(null);
+      await api.post(`/outfits/${outfitId}/accept`);
+      setOutfits((current) => current.filter((outfit) => outfit.id !== outfitId));
     } catch (err) {
       console.error('Accept error:', err);
     }
   };
 
   const handleTryAnother = () => {
-    setOutfit(null);
+    setOutfits([]);
     handleGenerate();
   };
 
-  const handleReject = async () => {
-    if (!outfit) return;
-
+  const handleReject = async (outfitId: string) => {
     if (session?.accessToken) {
       setAccessToken(session.accessToken as string);
     }
 
     try {
-      await api.post(`/outfits/${outfit.id}/reject`);
+      await api.post(`/outfits/${outfitId}/reject`);
     } catch (err) {
       console.error('Reject error:', err);
     }
 
-    setOutfit(null);
-    handleGenerate();
+    setOutfits((current) => current.filter((outfit) => outfit.id !== outfitId));
   };
 
   const handleNewRequest = () => {
-    setOutfit(null);
+    setOutfits([]);
     setSelectedOccasion(null);
+    setSelectedStyle(null);
     setError(null);
   };
 
@@ -568,7 +556,7 @@ export default function SuggestPage() {
         </Alert>
       )}
 
-      {!outfit ? (
+      {outfits.length === 0 ? (
         <div className="space-y-6">
           {/* Weather context */}
           <WeatherCard weather={weather ?? undefined} isLoading={weatherLoading} temperatureUnit={temperatureUnit} t={t} />
@@ -577,6 +565,21 @@ export default function SuggestPage() {
           <Card>
             <CardContent className="p-6 space-y-6">
               <DetectedStyleSelector selected={selectedStyle} onSelect={setSelectedStyle} />
+
+              <div className="space-y-2">
+                <Label htmlFor="outfit-count">{t('outfitCount')}</Label>
+                <Input
+                  id="outfit-count"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={outfitCount}
+                  onChange={(event) =>
+                    setOutfitCount(Math.min(20, Math.max(1, Number(event.target.value) || 1)))
+                  }
+                />
+                <p className="text-xs text-muted-foreground">{t('outfitCountHint')}</p>
+              </div>
 
               {/* Occasion selection */}
               <div className="space-y-3">
@@ -601,7 +604,7 @@ export default function SuggestPage() {
                   size="lg"
                   className="w-full gap-2"
                   onClick={handleGenerate}
-                  disabled={!selectedOccasion || isGenerating}
+                  disabled={!selectedOccasion || !selectedStyle || isGenerating}
                 >
                   {isGenerating ? (
                     <>
@@ -620,16 +623,21 @@ export default function SuggestPage() {
           </Card>
         </div>
       ) : (
-        <OutfitResult
-          outfit={outfit}
-          occasion={selectedOccasion || 'casual'}
-          temperatureUnit={temperatureUnit}
-          onAccept={handleAccept}
-          onReject={handleReject}
-          onTryAnother={handleTryAnother}
-          onNewRequest={handleNewRequest}
-          t={t}
-        />
+        <div className="space-y-10">
+          {outfits.map((outfit) => (
+            <OutfitResult
+              key={outfit.id}
+              outfit={outfit}
+              occasion={selectedOccasion || 'casual'}
+              temperatureUnit={temperatureUnit}
+              onAccept={() => handleAccept(outfit.id)}
+              onReject={() => handleReject(outfit.id)}
+              onTryAnother={handleTryAnother}
+              onNewRequest={handleNewRequest}
+              t={t}
+            />
+          ))}
+        </div>
       )}
     </div>
   );

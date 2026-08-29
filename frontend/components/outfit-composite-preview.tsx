@@ -4,8 +4,18 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ImageOff } from 'lucide-react';
 
-import { OutfitItem } from '@/lib/hooks/use-outfits';
 import { cn } from '@/lib/utils';
+
+interface CompositeOutfitItem {
+  id: string;
+  type: string;
+  name?: string | null;
+  image_url?: string | null;
+  thumbnail_url?: string | null;
+  transparent_url?: string | null;
+  layer_type?: string | null;
+  position: number;
+}
 
 type BodySlot = 'outerwear' | 'full' | 'top' | 'bottom' | 'shoes' | 'accessory';
 
@@ -68,19 +78,19 @@ const SLOT_CLASSES: Record<BodySlot, string> = {
   accessory: 'col-start-3 row-start-2 row-span-3 z-40',
 };
 
-export function getOutfitBodySlot(item: OutfitItem): BodySlot {
+export function getOutfitBodySlot(item: CompositeOutfitItem): BodySlot {
   const layer = item.layer_type?.toLowerCase();
   if (layer && LAYER_SLOTS[layer]) return LAYER_SLOTS[layer];
   return TYPE_SLOTS[item.type.toLowerCase()] || 'accessory';
 }
 
 interface OutfitCompositePreviewProps {
-  items: OutfitItem[];
+  items: CompositeOutfitItem[];
   className?: string;
 }
 
 export function OutfitCompositePreview({ items, className }: OutfitCompositePreviewProps) {
-  const groups = new Map<BodySlot, OutfitItem[]>();
+  const groups = new Map<BodySlot, CompositeOutfitItem[]>();
   for (const item of [...items].sort((a, b) => a.position - b.position || a.id.localeCompare(b.id))) {
     const slot = getOutfitBodySlot(item);
     groups.set(slot, [...(groups.get(slot) || []), item]);

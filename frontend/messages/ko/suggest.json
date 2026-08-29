@@ -47,6 +47,8 @@
   },
   "loveIt": "마음에 들어요",
   "occasionPrompt": "어떤 상황인가요?",
+  "outfitCount": "코디 수",
+  "outfitCountHint": "1개에서 20개까지 선택할 수 있으며 기본값은 3개입니다.",
   "outfitPreview": {
     "familyRatings": {
       "average": "(평균 {rating} <star></star>)",

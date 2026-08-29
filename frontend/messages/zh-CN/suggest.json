@@ -47,6 +47,8 @@
   },
   "loveIt": "喜欢",
   "occasionPrompt": "今天什么场合？",
+  "outfitCount": "搭配数量",
+  "outfitCountHint": "可选择 1 到 20 套，默认为 3 套。",
   "outfitPreview": {
     "familyRatings": {
       "average": "（平均 {rating} <star></star>）",

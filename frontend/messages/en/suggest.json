@@ -47,6 +47,8 @@
   },
   "loveIt": "Love it",
   "occasionPrompt": "What's the occasion?",
+  "outfitCount": "Number of outfits",
+  "outfitCountHint": "Choose between 1 and 20. The default is 3.",
   "outfitPreview": {
     "familyRatings": {
       "average": "({rating} <star></star> avg)",
