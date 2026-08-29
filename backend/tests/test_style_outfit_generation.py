@@ -103,18 +103,6 @@ class TestStyleOutfitService:
             [2, 3, 4],
         ]
 
-    def test_deterministic_copy_uses_only_selected_item_metadata(self) -> None:
-        selected = [
-            SimpleNamespace(type="shirt", primary_color="blue"),
-            SimpleNamespace(type="pants", primary_color="beige"),
-            SimpleNamespace(type="shoes", primary_color="white"),
-        ]
-
-        headline, styling_tip = StyleOutfitService._deterministic_copy(selected, "smart-casual")
-
-        assert headline == "Smart Casual outfit"
-        assert styling_tip == "Wear together: blue shirt, beige pants, white shoes."
-
     def test_rejects_fractional_item_numbers_without_coercion(self) -> None:
         number_map = {1: SimpleNamespace(type="shirt")}
 
@@ -149,6 +137,8 @@ class TestStyleOutfitService:
         assert response.status_code == 200, response.json()
         assert len(response.json()["outfits"]) == 1
         assert response.json()["outfits"][0]["target_style"] == "casual"
+        assert response.json()["outfits"][0]["reasoning"] is None
+        assert response.json()["outfits"][0]["style_notes"] is None
 
     @pytest.mark.asyncio
     async def test_generates_and_atomically_persists_exactly_n_complete_outfits(

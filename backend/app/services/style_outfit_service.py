@@ -184,16 +184,6 @@ class StyleOutfitService:
             safe["highlights"] = [value.strip() for value in highlights]
         return safe
 
-    @staticmethod
-    def _deterministic_copy(selected: list[ClothingItem], target_style: str) -> tuple[str, str]:
-        """Build visible copy exclusively from validated wardrobe metadata."""
-
-        style_label = target_style.replace("-", " ").title()
-        item_labels = [
-            " ".join(part for part in (item.primary_color, item.type) if part) for item in selected
-        ]
-        return f"{style_label} outfit", f"Wear together: {', '.join(item_labels)}."
-
     async def generate(
         self,
         *,
@@ -287,14 +277,11 @@ class StyleOutfitService:
         created: list[Outfit] = []
         try:
             for index, (proposal, selected, model, endpoint) in enumerate(accepted):
-                reasoning, style_notes = self._deterministic_copy(selected, target_style)
                 outfit = Outfit(
                     user_id=user.id,
                     occasion=occasion,
                     target_style=target_style,
                     scheduled_for=scheduled_date or get_user_today(user),
-                    reasoning=reasoning,
-                    style_notes=style_notes,
                     ai_raw_response={
                         **proposal,
                         "_ai_model": model,

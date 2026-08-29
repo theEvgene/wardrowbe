@@ -117,7 +117,9 @@ const secondStyleOutfit = {
   source: 'on_demand',
   target_style: 'casual',
   source_item: null,
-  reasoning: 'Green shirt with beige pants and white shoes',
+  reasoning: null,
+  style_notes: null,
+  highlights: [],
   items: [
     {
       ...pairing.items[0],
@@ -139,6 +141,9 @@ const firstStyleOutfit = {
   source: 'on_demand',
   target_style: 'casual',
   source_item: null,
+  reasoning: null,
+  style_notes: null,
+  highlights: [],
 };
 
 async function installApiContract(page: Page) {
@@ -364,7 +369,5 @@ test('user reaches a cutout-based composite outfit through the browser happy pat
   await page.getByRole('button', { name: 'Get Suggestion' }).click();
 
   await expect(page.getByTestId('outfit-composite')).toHaveCount(2);
-  await expect(page.getByText(firstStyleOutfit.reasoning)).toBeVisible();
-  await expect(page.getByText(secondStyleOutfit.reasoning)).toBeVisible();
   assertCleanBrowserContract();
 });
