@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import date, timedelta
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -26,6 +27,38 @@ class TestStyleBatchRequest:
     def test_count_must_be_between_one_and_twenty(self, count: int) -> None:
         with pytest.raises(ValidationError):
             StyleBatchRequest(target_style="casual", count=count)
+
+    def test_normalizes_generation_context(self) -> None:
+        item_id = uuid4()
+        request = StyleBatchRequest(
+            target_style="casual",
+            scheduled_for=date.today(),
+            time_of_day="evening",
+            activity="  Dinner with friends  ",
+            constraints={
+                "required_item_ids": [item_id],
+                "excluded_item_ids": [],
+                "avoided_colors": [" Orange ", "orange", "LIME"],
+                "note": "  Prefer light layers  ",
+            },
+        )
+
+        assert request.activity == "Dinner with friends"
+        assert request.constraints.required_item_ids == [item_id]
+        assert request.constraints.avoided_colors == ["orange", "lime"]
+        assert request.constraints.note == "Prefer light layers"
+
+    def test_rejects_contradictory_item_constraints(self) -> None:
+        item_id = uuid4()
+
+        with pytest.raises(ValidationError, match="required and excluded"):
+            StyleBatchRequest(
+                target_style="casual",
+                constraints={
+                    "required_item_ids": [item_id],
+                    "excluded_item_ids": [item_id],
+                },
+            )
 
 
 class PromptAwareAI:
@@ -139,6 +172,115 @@ class TestStyleOutfitService:
         assert response.json()["outfits"][0]["target_style"] == "casual"
         assert response.json()["outfits"][0]["reasoning"] is None
         assert response.json()["outfits"][0]["style_notes"] is None
+
+    @pytest.mark.asyncio
+    async def test_public_endpoint_persists_and_returns_generation_context(
+        self, client, auth_headers, db_session: AsyncSession, test_user, monkeypatch
+    ) -> None:
+        wardrobe = [
+            ClothingItem(
+                user_id=test_user.id,
+                type=item_type,
+                image_path=f"test/{uuid4()}.jpg",
+                status=ItemStatus.ready,
+                style=["casual"],
+            )
+            for item_type in ["shirt", "pants", "shoes"]
+        ]
+        db_session.add_all(wardrobe)
+        await db_session.commit()
+        monkeypatch.setattr("app.services.style_outfit_service.AIService", PromptAwareAI)
+        scheduled_for = date.today() + timedelta(days=1)
+
+        response = await client.post(
+            "/api/v1/outfits/generate-by-style",
+            json={
+                "target_style": "casual",
+                "count": 1,
+                "scheduled_for": scheduled_for.isoformat(),
+                "time_of_day": "evening",
+                "activity": "Dinner with friends",
+                "constraints": {
+                    "required_item_ids": [str(wardrobe[0].id)],
+                    "avoided_colors": ["orange"],
+                    "note": "Prefer light layers",
+                },
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200, response.json()
+        outfit = response.json()["outfits"][0]
+        assert outfit["scheduled_for"] == scheduled_for.isoformat()
+        assert outfit["generation_context"] == {
+            "time_of_day": "evening",
+            "activity": "Dinner with friends",
+            "constraints": {
+                "required_item_ids": [str(wardrobe[0].id)],
+                "excluded_item_ids": [],
+                "avoided_colors": ["orange"],
+                "note": "Prefer light layers",
+            },
+        }
+
+        detail = await client.get(f"/api/v1/outfits/{outfit['id']}", headers=auth_headers)
+        assert detail.status_code == 200
+        assert detail.json()["generation_context"] == outfit["generation_context"]
+
+    @pytest.mark.asyncio
+    async def test_public_endpoint_rejects_dates_outside_the_forecast_horizon(
+        self, client, auth_headers
+    ) -> None:
+        response = await client.post(
+            "/api/v1/outfits/generate-by-style",
+            json={
+                "target_style": "casual",
+                "scheduled_for": (date.today() + timedelta(days=16)).isoformat(),
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "scheduled_date_out_of_range"
+
+    @pytest.mark.asyncio
+    async def test_public_endpoint_rejects_unavailable_constraint_items(
+        self, client, auth_headers, db_session: AsyncSession, test_user, monkeypatch
+    ) -> None:
+        wardrobe = [
+            ClothingItem(
+                user_id=test_user.id,
+                type=item_type,
+                image_path=f"test/{uuid4()}.jpg",
+                status=ItemStatus.ready,
+                style=["casual"],
+            )
+            for item_type in ["shirt", "pants", "shoes"]
+        ]
+        archived = ClothingItem(
+            user_id=test_user.id,
+            type="jacket",
+            image_path=f"test/{uuid4()}.jpg",
+            status=ItemStatus.ready,
+            style=["casual"],
+            is_archived=True,
+        )
+        db_session.add_all([*wardrobe, archived])
+        await db_session.commit()
+        monkeypatch.setattr("app.services.style_outfit_service.AIService", PromptAwareAI)
+
+        response = await client.post(
+            "/api/v1/outfits/generate-by-style",
+            json={
+                "target_style": "casual",
+                "count": 1,
+                "constraints": {"required_item_ids": [str(archived.id)]},
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "constraint_item_unavailable"
 
     @pytest.mark.asyncio
     async def test_generates_and_atomically_persists_exactly_n_complete_outfits(

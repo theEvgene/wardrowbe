@@ -52,6 +52,7 @@ class Outfit(Base):
 
     # Context
     weather_data: Mapped[dict | None] = mapped_column(JSONB)
+    generation_context: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     occasion: Mapped[str] = mapped_column(String(50), nullable=False)
     target_style: Mapped[str | None] = mapped_column(String(50), nullable=True)
     scheduled_for: Mapped[date | None] = mapped_column(Date, nullable=True)

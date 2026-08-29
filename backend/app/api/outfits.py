@@ -1,11 +1,11 @@
 import logging
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 from sqlalchemy import and_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -39,7 +39,7 @@ from app.services.studio_service import (
     OutfitWornImmutableError,
     StudioService,
 )
-from app.services.style_outfit_service import StyleOutfitService
+from app.services.style_outfit_service import StyleContextError, StyleOutfitService
 from app.services.suggestion_cache import clear_suggestions
 from app.services.weather_service import WeatherData
 from app.utils.auth import get_current_user
@@ -116,10 +116,50 @@ class SuggestRequest(BaseModel):
     include_items: list[UUID] = Field(default_factory=list, description="Items to include")
 
 
+class StyleBatchConstraintsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    required_item_ids: list[UUID] = Field(default_factory=list, max_length=20)
+    excluded_item_ids: list[UUID] = Field(default_factory=list, max_length=20)
+    avoided_colors: list[str] = Field(default_factory=list, max_length=20)
+    note: str | None = Field(default=None, max_length=500)
+
+    @field_validator("required_item_ids", "excluded_item_ids")
+    @classmethod
+    def reject_duplicate_ids(cls, values: list[UUID]) -> list[UUID]:
+        if len(values) != len(set(values)):
+            raise ValueError("Constraint item IDs must not contain duplicates")
+        return values
+
+    @field_validator("avoided_colors")
+    @classmethod
+    def normalize_colors(cls, values: list[str]) -> list[str]:
+        normalized = [value.strip().lower() for value in values if value.strip()]
+        return list(dict.fromkeys(normalized))
+
+    @field_validator("note")
+    @classmethod
+    def normalize_note(cls, value: str | None) -> str | None:
+        normalized = value.strip() if value else None
+        return normalized or None
+
+    @model_validator(mode="after")
+    def reject_contradictory_ids(self):
+        if set(self.required_item_ids) & set(self.excluded_item_ids):
+            raise ValueError("An item cannot be both required and excluded")
+        return self
+
+
 class StyleBatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     target_style: str = Field(min_length=1, max_length=50)
     count: int = Field(default=3, ge=1, le=20)
     occasion: str = Field(default="casual", max_length=50)
+    scheduled_for: date | None = None
+    time_of_day: Literal["morning", "afternoon", "evening", "night", "full day"] | None = None
+    activity: str | None = Field(default=None, max_length=200)
+    constraints: StyleBatchConstraintsRequest = Field(default_factory=StyleBatchConstraintsRequest)
 
     @field_validator("target_style", "occasion")
     @classmethod
@@ -134,6 +174,12 @@ class StyleBatchRequest(BaseModel):
                 f"Invalid occasion '{value}'. Must be one of: {', '.join(sorted(VALID_OCCASIONS))}"
             )
         return value
+
+    @field_validator("activity")
+    @classmethod
+    def normalize_activity(cls, value: str | None) -> str | None:
+        normalized = value.strip() if value else None
+        return normalized or None
 
 
 class OutfitItemResponse(BaseModel):
@@ -226,6 +272,7 @@ class OutfitResponse(BaseModel):
     notes: str | None = None
     highlights: list[str] | None = None
     weather: dict | None = None
+    generation_context: dict | None = None
     items: list[OutfitItemResponse]
     feedback: FeedbackSummary | None = None
     family_ratings: list[FamilyRatingResponse] | None = None
@@ -453,6 +500,7 @@ def outfit_to_response(
         notes=outfit.notes,
         highlights=highlights,
         weather=outfit.weather_data,
+        generation_context=outfit.generation_context,
         items=items,
         feedback=feedback_summary,
         family_ratings=family_ratings_list,
@@ -544,13 +592,35 @@ async def generate_outfits_by_style(
     """Generate and persist an exact batch for one detected wardrobe style."""
 
     await rate_limit_by_user(str(current_user.id), "style-batch", max_requests=5, window_seconds=60)
+    user_today = get_user_today(current_user)
+    scheduled_for = request.scheduled_for or user_today
+    if scheduled_for < user_today or scheduled_for > user_today + timedelta(days=15):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "scheduled_date_out_of_range",
+                "message": "Scheduled date must be between today and 15 days from today",
+            },
+        )
+    generation_context = {
+        "time_of_day": request.time_of_day,
+        "activity": request.activity,
+        "constraints": request.constraints.model_dump(mode="json"),
+    }
     try:
         outfits = await StyleOutfitService(db).generate(
             user=current_user,
             target_style=request.target_style,
             count=request.count,
             occasion=request.occasion,
+            scheduled_date=scheduled_for,
+            generation_context=generation_context,
         )
+    except StyleContextError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": exc.code, "message": exc.message},
+        ) from None
     except InsufficientWardrobeError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
     except AIDisabledError:

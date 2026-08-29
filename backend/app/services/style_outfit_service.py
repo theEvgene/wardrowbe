@@ -26,6 +26,13 @@ MAX_GENERATION_ATTEMPTS = 3
 MAX_VISIBLE_TEXT_LENGTH = 2000
 
 
+class StyleContextError(ValueError):
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
 class StyleOutfitService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -192,12 +199,36 @@ class StyleOutfitService:
         count: int = 3,
         occasion: str = "casual",
         scheduled_date: date | None = None,
+        generation_context: dict | None = None,
     ) -> list[Outfit]:
         """Generate, validate, and atomically persist an exact style-driven outfit batch."""
 
         require_internal_ai("text")
         target_style = target_style.strip().lower()
         candidates = await self._candidates(user.id)
+        context = generation_context or {
+            "time_of_day": None,
+            "activity": None,
+            "constraints": {
+                "required_item_ids": [],
+                "excluded_item_ids": [],
+                "avoided_colors": [],
+                "note": None,
+            },
+        }
+        constraints = context.get("constraints") or {}
+        constrained_ids = {
+            UUID(item_id)
+            for field in ("required_item_ids", "excluded_item_ids")
+            for item_id in constraints.get(field, [])
+        }
+        candidate_ids = {item.id for item in candidates}
+        if unavailable_ids := constrained_ids - candidate_ids:
+            raise StyleContextError(
+                "constraint_item_unavailable",
+                "Constraint items must be active canonical wardrobe items owned by the user: "
+                + ", ".join(sorted(str(item_id) for item_id in unavailable_ids)),
+            )
         detected_styles = {
             normalized for item in candidates for normalized in normalize_style_labels(item.style)
         }
@@ -282,6 +313,7 @@ class StyleOutfitService:
                     occasion=occasion,
                     target_style=target_style,
                     scheduled_for=scheduled_date or get_user_today(user),
+                    generation_context=context,
                     ai_raw_response={
                         **proposal,
                         "_ai_model": model,
