@@ -3,6 +3,8 @@
     "addItem": "新增單品"
   },
   "addItem": {
+    "autoExtract": "AI 分析後自動擷取衣物",
+    "autoExtractHint": "保留原圖以便復原；低品質或不支援的結果不會套用。",
     "brandInputPlaceholder": "例如：UNIQLO",
     "brandPlaceholder": "品牌",
     "bulk": {

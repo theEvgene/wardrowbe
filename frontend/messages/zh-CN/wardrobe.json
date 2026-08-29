@@ -3,6 +3,8 @@
     "addItem": "添加单品"
   },
   "addItem": {
+    "autoExtract": "AI 分析后自动抠出衣物",
+    "autoExtractHint": "保留原图以便撤销；低质量或不支持的结果不会应用。",
     "brandInputPlaceholder": "例如：优衣库",
     "brandPlaceholder": "品牌",
     "bulk": {

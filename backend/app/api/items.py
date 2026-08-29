@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
 from app.database import get_db
@@ -186,6 +187,7 @@ async def create_item(
     primary_color: str | None = Form(None),
     favorite: bool = Form(False),
     skip_ai: bool = Form(False),
+    auto_extract: bool = Form(True),
 ) -> ItemResponse:
     # Validate and process image
     image_service = ImageService()
@@ -265,6 +267,7 @@ async def create_item(
                         "tag_item_image",
                         str(item.id),
                         full_image_path,
+                        auto_extract,
                         _queue_name="arq:tagging",
                     )
                     item.ai_job_id = job.job_id
@@ -294,6 +297,7 @@ async def bulk_create_items(
     current_user: Annotated[User, Depends(get_current_user)],
     images: list[UploadFile] = File(..., description="Multiple image files to upload"),
     skip_ai: bool = Form(False),
+    auto_extract: bool = Form(True),
     upload_keys: list[str] | None = Form(
         None,
         description="Optional per-file idempotency keys, same order/length as images. "
@@ -429,6 +433,7 @@ async def bulk_create_items(
                                 "tag_item_image",
                                 str(item.id),
                                 full_image_path,
+                                auto_extract,
                                 _queue_name="arq:tagging",
                             )
                             item.ai_job_id = job.job_id
@@ -1315,8 +1320,16 @@ async def remove_item_background(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> RemoveBackgroundResponse:
-    item_service = ItemService(db)
-    item = await item_service.get_by_id(item_id, current_user.id)
+    # Serialize manual and automatic extraction. Both paths mutate the same
+    # image files, so checking metadata without locking the row can let an
+    # older attempt overwrite a newer accepted artifact on disk.
+    locked_item = await db.execute(
+        select(ClothingItem)
+        .where(ClothingItem.id == item_id, ClothingItem.user_id == current_user.id)
+        .options(selectinload(ClothingItem.additional_images))
+        .with_for_update()
+    )
+    item = locked_item.scalar_one_or_none()
 
     if not item:
         raise HTTPException(

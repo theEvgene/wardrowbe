@@ -13,6 +13,7 @@ export interface QueuedUpload {
   size: number;
   lastModified: number;
   skipAi: boolean;
+  autoExtract: boolean;
   addedAt: number;
   updatedAt: number;
   status: UploadStatus;
@@ -143,7 +144,9 @@ export async function estimateQuota(): Promise<{ quota: number; usage: number } 
 }
 
 async function findReusableRecord(
-  file: File
+  file: File,
+  skipAi: boolean,
+  autoExtract: boolean
 ): Promise<QueuedUpload | undefined> {
   const records = await getAllRecords();
   return records.find(
@@ -151,13 +154,16 @@ async function findReusableRecord(
       !r.terminal &&
       r.filename === file.name &&
       r.size === file.size &&
-      r.lastModified === file.lastModified
+      r.lastModified === file.lastModified &&
+      r.skipAi === skipAi &&
+      (r.autoExtract ?? true) === autoExtract
   );
 }
 
 export async function enqueueFiles(
   files: File[],
-  skipAi: boolean
+  skipAi: boolean,
+  autoExtract: boolean = true
 ): Promise<{ staged: string[]; unprotected: File[] }> {
   if (!hasIndexedDb()) {
     return { staged: [], unprotected: files };
@@ -172,7 +178,7 @@ export async function enqueueFiles(
 
   for (const file of files) {
     try {
-      const reusable = await findReusableRecord(file);
+      const reusable = await findReusableRecord(file, skipAi, autoExtract);
       if (reusable) {
         staged.push(reusable.id);
         continue;
@@ -187,6 +193,7 @@ export async function enqueueFiles(
         size: file.size,
         lastModified: file.lastModified,
         skipAi,
+        autoExtract,
         addedAt: now,
         updatedAt: now,
         status: 'pending',

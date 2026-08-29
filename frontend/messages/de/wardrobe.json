@@ -3,6 +3,8 @@
     "addItem": "Stück hinzufügen"
   },
   "addItem": {
+    "autoExtract": "Kleidungsstück nach der KI-Analyse automatisch freistellen",
+    "autoExtractHint": "Das Original bleibt zum Rückgängigmachen erhalten; ungeeignete Ergebnisse werden nicht angewendet.",
     "brandInputPlaceholder": "z. B. Hugo Boss",
     "brandPlaceholder": "Marke",
     "bulk": {

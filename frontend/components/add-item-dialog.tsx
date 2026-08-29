@@ -69,6 +69,7 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
   const [bulkFiles, setBulkFiles] = useState<FileWithPreview[]>([]);
   const [bulkResult, setBulkResult] = useState<BulkUploadResponse | null>(null);
   const [skipAi, setSkipAi] = useState(false);
+  const [autoExtract, setAutoExtract] = useState(true);
   const [activeTab, setActiveTab] = useState('single');
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
@@ -144,6 +145,7 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
     if (brand) formData.append('brand', brand);
     if (primaryColor) formData.append('primary_color', primaryColor);
     if (notes) formData.append('notes', notes);
+    formData.append('auto_extract', String(autoExtract));
 
     try {
       await createItem.mutateAsync(formData);
@@ -160,6 +162,7 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
       const result = await bulkCreateItems.mutateAsync({
         files: bulkFiles.map((f) => f.file),
         skipAi,
+        autoExtract,
       });
 
       if (result.staged > 0) {
@@ -220,6 +223,7 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
     setBulkFiles([]);
     setBulkResult(null);
     setSkipAi(false);
+    setAutoExtract(true);
     setActiveTab('single');
     setShowCloseConfirm(false);
 
@@ -250,6 +254,7 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
     setBulkFiles([]);
     setBulkResult(null);
     setSkipAi(false);
+    setAutoExtract(true);
   };
 
   return (
@@ -384,6 +389,20 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
                     placeholder={t('notesInputPlaceholder')}
                   />
                 </div>
+
+                <div className="flex items-start gap-2 rounded-md border p-3">
+                  <Checkbox
+                    id="single-auto-extract"
+                    checked={autoExtract}
+                    onCheckedChange={(checked) => setAutoExtract(checked === true)}
+                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="single-auto-extract" className="font-normal">
+                      {t('autoExtract')}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">{t('autoExtractHint')}</p>
+                  </div>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
@@ -482,6 +501,23 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
                       <Label htmlFor="skip-ai" className="text-xs font-normal text-muted-foreground">
                         {t('bulk.skipAi')}
                       </Label>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        id="bulk-auto-extract"
+                        checked={autoExtract}
+                        disabled={skipAi}
+                        onCheckedChange={(checked) => setAutoExtract(checked === true)}
+                      />
+                      <div className="space-y-1">
+                        <Label
+                          htmlFor="bulk-auto-extract"
+                          className="text-xs font-normal text-muted-foreground"
+                        >
+                          {t('autoExtract')}
+                        </Label>
+                        <p className="text-xs text-muted-foreground">{t('autoExtractHint')}</p>
+                      </div>
                     </div>
                     {!skipAi && (
                       <p className="text-xs text-muted-foreground">

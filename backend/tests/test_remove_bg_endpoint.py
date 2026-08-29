@@ -87,7 +87,7 @@ class TestRemoveBackgroundEndpoint:
                 headers=auth_headers,
             )
 
-        assert response.status_code == 200
+        assert response.status_code == 200, response.json()
         data = response.json()
         assert data["background_removal"]["outcome"] == "unsupported"
         assert data["original_image_path"] is None

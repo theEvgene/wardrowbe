@@ -3,6 +3,8 @@
     "addItem": "Ajouter un article"
   },
   "addItem": {
+    "autoExtract": "Isoler automatiquement le vêtement après l’analyse IA",
+    "autoExtractHint": "L’original est conservé pour annuler ; les résultats non fiables ne sont pas appliqués.",
     "brandInputPlaceholder": "ex. J.Crew",
     "brandPlaceholder": "Marque",
     "bulk": {

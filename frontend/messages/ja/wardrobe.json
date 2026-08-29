@@ -3,6 +3,8 @@
     "addItem": "アイテムを追加"
   },
   "addItem": {
+    "autoExtract": "AI解析後に衣類を自動で切り抜く",
+    "autoExtractHint": "元画像は復元用に保持され、低品質または非対応の結果は適用されません。",
     "brandInputPlaceholder": "例：ユニクロ",
     "brandPlaceholder": "ブランド",
     "bulk": {

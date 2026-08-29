@@ -3,6 +3,8 @@
     "addItem": "Aggiungi capo"
   },
   "addItem": {
+    "autoExtract": "Isola automaticamente il capo dopo l’analisi IA",
+    "autoExtractHint": "L’originale resta disponibile per annullare; i risultati inaffidabili non vengono applicati.",
     "brandInputPlaceholder": "es., J.Crew",
     "brandPlaceholder": "Marca",
     "bulk": {

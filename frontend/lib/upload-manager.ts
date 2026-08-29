@@ -102,6 +102,7 @@ async function uploadChunk(chunk: QueuedUpload[]): Promise<BulkUploadResponse> {
   const formData = new FormData();
   chunk.forEach((record) => formData.append('images', record.file, record.filename));
   formData.append('skip_ai', String(chunk[0]?.skipAi ?? false));
+  formData.append('auto_extract', String(chunk[0]?.autoExtract ?? true));
   chunk.forEach((record) => formData.append('upload_keys', record.id));
 
   const token = getAccessToken();
@@ -166,10 +167,13 @@ async function drainOnce(): Promise<boolean> {
   });
   if (actionable.length === 0) return false;
 
-  // A chunk request carries one skip_ai value - keep chunks homogeneous
-  // rather than threading a per-file flag through the endpoint.
+  // A chunk request carries one skip_ai and auto_extract value - keep chunks
+  // homogeneous rather than threading per-file flags through the endpoint.
   const skipAi = actionable[0].skipAi;
-  const chunk = actionable.filter((r) => r.skipAi === skipAi).slice(0, effectiveChunkSize);
+  const autoExtract = actionable[0].autoExtract ?? true;
+  const chunk = actionable
+    .filter((r) => r.skipAi === skipAi && (r.autoExtract ?? true) === autoExtract)
+    .slice(0, effectiveChunkSize);
 
   for (const record of chunk) {
     await markUploading(record.id);

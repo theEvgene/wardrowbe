@@ -178,7 +178,9 @@ async def update_item_status_to_error(ctx: dict, item_id: str, error_msg: str) -
         logger.error(f"Failed to update item {item_id} status to error: {e}")
 
 
-async def tag_item_image(ctx: dict, item_id: str, image_path: str) -> dict[str, Any]:
+async def tag_item_image(
+    ctx: dict, item_id: str, image_path: str, auto_extract: bool = False
+) -> dict[str, Any]:
     """
     Analyze an item's image and update it with AI-generated tags.
 
@@ -338,6 +340,22 @@ async def tag_item_image(ctx: dict, item_id: str, image_path: str) -> dict[str, 
 
             await db.commit()
             logger.info(f"Updated item {item_id} with AI tags (status=ready)")
+
+            if auto_extract:
+                redis = ctx.get("redis")
+                if redis is None:
+                    logger.warning(
+                        "Garment extraction not queued for %s: Redis unavailable", item_id
+                    )
+                else:
+                    try:
+                        await redis.enqueue_job(
+                            "extract_item_garment",
+                            item_id,
+                            _queue_name="arq:tagging",
+                        )
+                    except Exception:
+                        logger.exception("Failed to queue garment extraction for %s", item_id)
 
             if get_settings().garment_matching_enabled:
                 redis = ctx.get("redis")

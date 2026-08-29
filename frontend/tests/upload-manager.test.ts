@@ -49,6 +49,24 @@ describe('startDrain', () => {
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 
+  it('sends the durable auto-extraction choice to the bulk endpoint', async () => {
+    vi.mocked(fetch).mockReset()
+    await enqueueFiles([makeFile('a.jpg')], false, false)
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({
+        total: 1,
+        successful: 1,
+        failed: 0,
+        results: [{ filename: 'a.jpg', success: true }],
+      })
+    )
+
+    await manager.startDrain()
+
+    const request = vi.mocked(fetch).mock.calls[0][1]
+    expect((request?.body as FormData).get('auto_extract')).toBe('false')
+  })
+
   it('treats a duplicate result as done, not a failure', async () => {
     await enqueueFiles([makeFile('a.jpg')], false)
     vi.mocked(fetch).mockResolvedValueOnce(

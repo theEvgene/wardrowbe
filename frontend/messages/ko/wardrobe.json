@@ -3,6 +3,8 @@
     "addItem": "아이템 추가"
   },
   "addItem": {
+    "autoExtract": "AI 분석 후 의류를 자동으로 분리",
+    "autoExtractHint": "실행 취소를 위해 원본을 보존하며, 품질이 낮거나 지원되지 않는 결과는 적용하지 않습니다.",
     "brandInputPlaceholder": "예: 유니클로",
     "brandPlaceholder": "브랜드",
     "bulk": {

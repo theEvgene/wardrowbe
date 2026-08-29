@@ -3,6 +3,8 @@
     "addItem": "Add Item"
   },
   "addItem": {
+    "autoExtract": "Automatically isolate the garment after AI analysis",
+    "autoExtractHint": "Keeps the original for undo; unsupported or low-quality results are not applied.",
     "brandInputPlaceholder": "e.g., J.Crew",
     "brandPlaceholder": "Brand",
     "bulk": {

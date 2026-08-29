@@ -37,6 +37,14 @@ describe('enqueueFiles', () => {
     expect(pending).toHaveLength(2)
     expect(pending.map((r) => r.filename).sort()).toEqual(['a.jpg', 'b.jpg'])
     expect(pending.every((r) => r.status === 'pending')).toBe(true)
+    expect(pending.every((r) => r.autoExtract === true)).toBe(true)
+  })
+
+  it('persists an explicit auto-extraction opt-out with the durable upload', async () => {
+    await enqueueFiles([makeFile('a.jpg')], false, false)
+
+    const [pending] = await getPendingUploads()
+    expect(pending.autoExtract).toBe(false)
   })
 
   it('reuses an existing non-terminal record instead of duplicating on reselect', async () => {
