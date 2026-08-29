@@ -5,6 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0](https://github.com/theEvgene/wardrowbe/compare/wardrowbe-v1.8.2...wardrowbe-v1.9.0) (2026-08-29)
+
+
+### ✨ Features
+
+* add composite outfit preview ([09c92d2](https://github.com/theEvgene/wardrowbe/commit/09c92d246056d4488b8cc31295bee7cfaa5d2739))
+* add confidence-aware metadata review ([abef103](https://github.com/theEvgene/wardrowbe/commit/abef103ab4d9d0b492bb3dc24b3131c60aeb69d0))
+* add duplicate match decisions ([9bd611d](https://github.com/theEvgene/wardrowbe/commit/9bd611d35a538d520f26bce4f789cae70c76c49c))
+* add garment-aware background removal ([bfb8435](https://github.com/theEvgene/wardrowbe/commit/bfb84359af740eedb1422b4161386e38aeb6c6ae)), closes [#2](https://github.com/theEvgene/wardrowbe/issues/2)
+* auto extract garments after upload ([fd8fe0b](https://github.com/theEvgene/wardrowbe/commit/fd8fe0b5c1cc837f7e3209fa28cf4ada32375df4)), closes [#20](https://github.com/theEvgene/wardrowbe/issues/20)
+* complete duplicate garment review ([df0b025](https://github.com/theEvgene/wardrowbe/commit/df0b0252b091a1a4f4cdfd8225f7f1079dd288dd))
+* expose detected wardrobe styles ([a8d768f](https://github.com/theEvgene/wardrowbe/commit/a8d768fc007dcd05760718476166c50fc0081c0a)), closes [#19](https://github.com/theEvgene/wardrowbe/issues/19)
+* expose garment extraction metrics ([d5ff0f2](https://github.com/theEvgene/wardrowbe/commit/d5ff0f29fbcfb062833c69574a2a6466548082e3)), closes [#13](https://github.com/theEvgene/wardrowbe/issues/13)
+* generate outfit batches by detected style ([7c71d37](https://github.com/theEvgene/wardrowbe/commit/7c71d37041e1bab858a1236e30b365924e345a54)), closes [#21](https://github.com/theEvgene/wardrowbe/issues/21)
+* productionize epic one full-stack path ([950e9fb](https://github.com/theEvgene/wardrowbe/commit/950e9fbb416567add5b63dd07f677df91963138a)), closes [#14](https://github.com/theEvgene/wardrowbe/issues/14) [#15](https://github.com/theEvgene/wardrowbe/issues/15) [#16](https://github.com/theEvgene/wardrowbe/issues/16) [#17](https://github.com/theEvgene/wardrowbe/issues/17)
+* propose same-garment matches ([ba26b05](https://github.com/theEvgene/wardrowbe/commit/ba26b05fac0a13704e3b4bbc47c6c733281c1b41))
+* repair invalid style outfit generations ([91be561](https://github.com/theEvgene/wardrowbe/commit/91be5615b14a0dccf9b1f2eb2d044af96815a6f5)), closes [#22](https://github.com/theEvgene/wardrowbe/issues/22)
+
+
+### 🐛 Bug Fixes
+
+* address epic 2 review findings ([a91c6eb](https://github.com/theEvgene/wardrowbe/commit/a91c6ebe2575304ee3e2154fa67e008f1852282d))
+* clean up stale cutouts across retries ([0f2e34d](https://github.com/theEvgene/wardrowbe/commit/0f2e34d2b11e05f85ebc72f995f40ec03e571a31))
+* clear frontend lint warnings ([9a1dede](https://github.com/theEvgene/wardrowbe/commit/9a1dededff1820dae80c55e564be81f831cfbf4a)), closes [#12](https://github.com/theEvgene/wardrowbe/issues/12)
+* detect near-identical image hashes ([a648b25](https://github.com/theEvgene/wardrowbe/commit/a648b254b62bbb8e602d970a12e54294bdbff71a))
+* gate dashboard queries during onboarding ([fb961c0](https://github.com/theEvgene/wardrowbe/commit/fb961c0f59b2ff202c6becab534dd10a5da6da7a))
+* harden epic 2 real-model path ([0457f85](https://github.com/theEvgene/wardrowbe/commit/0457f8501b7f71a358b5a32092f1cea1e98d453d))
+* harden garment extraction outcomes ([1fb0238](https://github.com/theEvgene/wardrowbe/commit/1fb0238fc9f8a02b2592a22873b4b6b5bb9465e8))
+* translate dialog close label ([e1567ab](https://github.com/theEvgene/wardrowbe/commit/e1567abe0e2cc59cb3f25c548d351387d2e0e22e))
+* validate pairing explanation claims ([2046a33](https://github.com/theEvgene/wardrowbe/commit/2046a33b5480ca998afaec5c84bb88a3653e8ce1))
+
+
+### ♻️ Refactoring
+
+* finalize epic 2 review seams ([dcdf500](https://github.com/theEvgene/wardrowbe/commit/dcdf5003f64c0274375c80a93d4437ad6aa2e110))
+
+
+### 📝 Documentation
+
+* configure agent workflows ([2dc57b3](https://github.com/theEvgene/wardrowbe/commit/2dc57b38b029ea584e607a6c01f767b98fa56b70))
+* research garment-only extraction ([c1d5696](https://github.com/theEvgene/wardrowbe/commit/c1d5696856fa9d973af370625812809d304ce07a))
+
+
+### 🧪 Tests
+
+* add browser epic happy path ([5761991](https://github.com/theEvgene/wardrowbe/commit/576199149135ef712661e140c060a6fb3dc423a4))
+* cover epic 2 full style path ([5aabcaa](https://github.com/theEvgene/wardrowbe/commit/5aabcaab7551879135c3c76a509fa3c3bf81805d))
+* cover epic garment-to-outfit happy path ([1ec6824](https://github.com/theEvgene/wardrowbe/commit/1ec682477ddaa4bcd5a2e4be384e257320b9a303))
+* expand garment extraction matrix ([3de7163](https://github.com/theEvgene/wardrowbe/commit/3de716366c5d4709c6f55d5a843a0eaf7204f2fd))
+* validate garment extraction photo modes ([e71ab83](https://github.com/theEvgene/wardrowbe/commit/e71ab83cad9b7a2fe64606b0a12eedd6d43be649))
+
+
+### 👷 CI/CD
+
+* allow manual verification runs ([830dbad](https://github.com/theEvgene/wardrowbe/commit/830dbad813abc0c47b081cb5de18768a6758f1fb))
+* move workflows to current action runtimes ([3633d3f](https://github.com/theEvgene/wardrowbe/commit/3633d3fe50bed41bb4491095e1b5af017f042a7e)), closes [#11](https://github.com/theEvgene/wardrowbe/issues/11)
+* refresh push trigger ([45e172c](https://github.com/theEvgene/wardrowbe/commit/45e172c01c883973b2593a6b73df1d7a08d10191))
+* reinitialize repository actions trigger ([bbbeefe](https://github.com/theEvgene/wardrowbe/commit/bbbeefe781c7936504838c9c51d032e9627a1f30))
+
+
+### 💄 Styling
+
+* format duplicate matcher regression ([5b3a09e](https://github.com/theEvgene/wardrowbe/commit/5b3a09e5c7982eb4397d9ffa262d6e872dcafcfc))
+
 ## [1.8.2](https://github.com/Anyesh/wardrowbe/compare/wardrowbe-v1.8.1...wardrowbe-v1.8.2) (2026-08-22)
 
 
