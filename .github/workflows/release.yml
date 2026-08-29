@@ -1,9 +1,10 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
+  # MVP development pushes directly to main and intentionally does not open
+  # pull requests. Keep release-please opt-in until the release-PR workflow is
+  # enabled again after MVP.
+  workflow_dispatch:
 
 permissions:
   contents: write
