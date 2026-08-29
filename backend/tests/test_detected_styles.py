@@ -46,6 +46,13 @@ async def test_detected_styles_only_count_current_active_canonical_ready_items(
             _item(test_user.id, styles=["processing"], status=ItemStatus.processing),
             _item(test_user.id, styles=["alias"], canonical_id=canonical.id),
             _item(other_user.id, styles=["other-user"]),
+            ClothingItem(
+                user_id=test_user.id,
+                type="unknown",
+                image_path=f"test/{uuid4()}.jpg",
+                style=["not-generatable"],
+                status=ItemStatus.ready,
+            ),
         ]
     )
     await db_session.commit()

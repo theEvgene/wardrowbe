@@ -541,6 +541,8 @@ async def generate_outfits_by_style(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> StyleBatchResponse:
+    """Generate and persist an exact batch for one detected wardrobe style."""
+
     await rate_limit_by_user(str(current_user.id), "style-batch", max_requests=5, window_seconds=60)
     try:
         outfits = await StyleOutfitService(db).generate(

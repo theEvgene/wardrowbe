@@ -28,6 +28,8 @@ async def list_detected_styles(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> DetectedStylesResponse:
+    """Return normalized styles found on the current user's active canonical items."""
+
     result = await db.execute(
         select(ClothingItem.style).where(
             and_(
@@ -35,6 +37,7 @@ async def list_detected_styles(
                 ClothingItem.status == ItemStatus.ready,
                 ClothingItem.is_archived.is_(False),
                 ClothingItem.canonical_item_id.is_(None),
+                ClothingItem.type != "unknown",
             )
         )
     )

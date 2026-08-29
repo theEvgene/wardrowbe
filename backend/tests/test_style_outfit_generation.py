@@ -103,6 +103,24 @@ class TestStyleOutfitService:
             [2, 3, 4],
         ]
 
+    def test_deterministic_copy_uses_only_selected_item_metadata(self) -> None:
+        selected = [
+            SimpleNamespace(type="shirt", primary_color="blue"),
+            SimpleNamespace(type="pants", primary_color="beige"),
+            SimpleNamespace(type="shoes", primary_color="white"),
+        ]
+
+        headline, styling_tip = StyleOutfitService._deterministic_copy(selected, "smart-casual")
+
+        assert headline == "Smart Casual outfit"
+        assert styling_tip == "Wear together: blue shirt, beige pants, white shoes."
+
+    def test_rejects_fractional_item_numbers_without_coercion(self) -> None:
+        number_map = {1: SimpleNamespace(type="shirt")}
+
+        with pytest.raises(AIRecommendationError, match="non-numeric"):
+            StyleOutfitService._validate_selection({"items": [1.9]}, number_map)
+
     @pytest.mark.asyncio
     async def test_public_endpoint_returns_requested_batch(
         self, client, auth_headers, db_session: AsyncSession, test_user, monkeypatch
@@ -265,7 +283,15 @@ class TestAdversarialStyleGeneration:
 
     @pytest.mark.parametrize(
         "response_kind",
-        ["malformed", "truncated", "unknown-id", "incomplete", "duplicate-sets", "unsafe-copy"],
+        [
+            "malformed",
+            "truncated",
+            "unknown-id",
+            "fractional-id",
+            "incomplete",
+            "duplicate-sets",
+            "unsafe-copy",
+        ],
     )
     @pytest.mark.asyncio
     async def test_rejects_adversarial_responses_without_partial_persistence(
@@ -295,6 +321,9 @@ class TestAdversarialStyleGeneration:
                     "malformed": "not json",
                     "truncated": '{"outfits":[',
                     "unknown-id": json.dumps({"outfits": [{"items": [999, *valid[1:]]}]}),
+                    "fractional-id": json.dumps(
+                        {"outfits": [{"items": [valid[0] + 0.9, *valid[1:]]}]}
+                    ),
                     "incomplete": json.dumps(
                         {"outfits": [{"items": [by_type["shirt"][0], by_type["shoes"][0]]}]}
                     ),

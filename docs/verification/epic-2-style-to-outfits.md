@@ -35,13 +35,13 @@ The Docker image caches both `u2net` and `u2net_cloth_seg` under `/opt/rembg` be
 
 ## Deterministic verification
 
-- Backend: **572 passed, 17 skipped**, 0 failures. Skips are opt-in licensed/model fixture cases.
+- Backend: **576 passed, 17 skipped**, 0 failures. Skips are opt-in licensed/model fixture cases.
 - Frontend Vitest: **165 passed**, 0 failures.
 - TypeScript: passed with `tsc --noEmit`.
 - i18n key, locale parity, and untranslated-string scans: passed.
 - Ruff lint: passed; changed Python files pass Ruff formatting.
 - Production Next.js build: passed.
-- Production Playwright browser happy path: **1 passed**, 0 failures.
+- Production Playwright browser happy path: **1 passed**, 0 failures. The scenario covers onboarding, upload with automatic safe extraction enabled, detected-style selection, exact-N generation, persistence, and composite previews.
 - Real local full-stack smoke with `gemma3:4b`: passed.
 
 The final GitHub Actions evidence and immutable run URL are recorded in the closure comment on issue #23 so this document does not require a follow-up commit after each CI run.

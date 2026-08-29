@@ -12,6 +12,7 @@ from app.config import get_settings
 from app.models.item import ClothingItem, ItemStatus, TaggedBy, TaggingStatus
 from app.models.preference import UserPreference
 from app.services.ai_service import AIService, ClothingTags
+from app.services.background_removal import garment_category_for_item_type
 from app.workers.db import get_db_session
 
 logger = logging.getLogger(__name__)
@@ -341,7 +342,7 @@ async def tag_item_image(
             await db.commit()
             logger.info(f"Updated item {item_id} with AI tags (status=ready)")
 
-            if auto_extract:
+            if auto_extract and garment_category_for_item_type(item.type) is not None:
                 redis = ctx.get("redis")
                 if redis is None:
                     logger.warning(

@@ -26,6 +26,8 @@ _PERSISTED_RESULT_KEYS = {
 
 
 async def remove_garment_background(image_path: str, item_type: str) -> dict[str, object]:
+    """Run the synchronous garment extraction provider without blocking the worker loop."""
+
     service = ImageService()
     return await asyncio.to_thread(
         service.remove_background,

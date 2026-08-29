@@ -21,7 +21,6 @@ import {
   Loader2,
   Thermometer,
   Droplets,
-  ChevronDown,
   MapPin,
   Wind,
   GlassWater,
@@ -37,30 +36,19 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
 import { api, ApiError, setAccessToken } from '@/lib/api';
 import { Outfit, StyleBatchResponse } from '@/lib/types';
 import { useOccasions } from '@/lib/hooks/use-translated-constants';
 import { useWeather, Weather } from '@/lib/hooks/use-weather';
 import { usePreferences } from '@/lib/hooks/use-preferences';
 import { cn } from '@/lib/utils';
-import { TempUnit, formatTemp, displayValue, toF, toCelsius } from '@/lib/temperature';
+import { TempUnit, formatTemp, displayValue } from '@/lib/temperature';
 import { DetectedStyleSelector } from '@/components/detected-style-selector';
 import { OutfitCompositePreview } from '@/components/outfit-composite-preview';
 import { buildStyleBatchRequest } from '@/lib/style-outfits';
 import { StyleGenerationError } from '@/components/style-generation-error';
 
 type Translator = (key: string, values?: Record<string, string | number>) => string;
-
-const OVERRIDE_CONDITION_KEYS: Record<string, string> = {
-  sunny: 'clear',
-  cloudy: 'cloudy',
-  rainy: 'rain',
-};
 
 // Map occasion values to icons and colors
 const OCCASION_CONFIG: Record<string, { icon: React.ReactNode; color: string }> = {
@@ -102,11 +90,6 @@ function getWeatherHintKey(weather: Weather): string {
   if (temp > 28) return 'weatherHints.hot';
   if (condition.includes('wind')) return 'weatherHints.windy';
   return 'weatherHints.nice';
-}
-
-interface WeatherOverride {
-  temperature: number;
-  condition: 'sunny' | 'cloudy' | 'rainy';
 }
 
 function WeatherCard({ weather, isLoading, temperatureUnit, t }: { weather?: Weather; isLoading: boolean; temperatureUnit: TempUnit; t: Translator }) {
@@ -217,93 +200,6 @@ function OccasionChips({
         );
       })}
     </div>
-  );
-}
-
-function WeatherOverrideSection({
-  weather,
-  onChange,
-  temperatureUnit,
-  t,
-}: {
-  weather: WeatherOverride | null;
-  onChange: (weather: WeatherOverride | null) => void;
-  temperatureUnit: TempUnit;
-  t: Translator;
-}) {
-  const tc = useTranslations('constants.weatherConditions');
-  const [isOpen, setIsOpen] = useState(false);
-  const conditions = [
-    { value: 'sunny', icon: <Sun className="h-4 w-4" /> },
-    { value: 'cloudy', icon: <Cloud className="h-4 w-4" /> },
-    { value: 'rainy', icon: <CloudRain className="h-4 w-4" /> },
-  ] as const;
-
-  return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <CollapsibleTrigger asChild>
-        <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ChevronDown className={cn('h-4 w-4 transition-transform', isOpen && 'rotate-180')} />
-          <span>{weather ? t('weatherOverride.active') : t('weatherOverride.overrideWeather')}</span>
-          {weather && (
-            <Badge variant="secondary" className="text-xs">
-              {tc(OVERRIDE_CONDITION_KEYS[weather.condition])} {formatTemp(weather.temperature, temperatureUnit)}
-            </Badge>
-          )}
-        </button>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="pt-4">
-        <div className="space-y-4 p-4 rounded-lg bg-muted/50">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">{t('weatherOverride.condition')}</span>
-            {weather && (
-              <Button variant="ghost" size="sm" onClick={() => onChange(null)}>
-                {t('weatherOverride.reset')}
-              </Button>
-            )}
-          </div>
-          <div className="flex gap-2">
-            {conditions.map((c) => (
-              <button
-                key={c.value}
-                onClick={() =>
-                  onChange({
-                    temperature: weather?.temperature ?? 20,
-                    condition: c.value,
-                  })
-                }
-                className={cn(
-                  'flex items-center gap-2 px-3 py-2 rounded-lg border transition-all',
-                  weather?.condition === c.value
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-muted bg-background hover:border-primary/50'
-                )}
-              >
-                {c.icon}
-                <span className="text-sm">{tc(OVERRIDE_CONDITION_KEYS[c.value])}</span>
-              </button>
-            ))}
-          </div>
-          {weather && (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground">{t('weatherOverride.temperature')}</span>
-              <input
-                type="range"
-                min={temperatureUnit === 'fahrenheit' ? 14 : -10}
-                max={temperatureUnit === 'fahrenheit' ? 104 : 40}
-                value={temperatureUnit === 'fahrenheit' ? Math.round(toF(weather.temperature)) : weather.temperature}
-                onChange={(e) => {
-                  const raw = parseInt(e.target.value);
-                  onChange({ ...weather, temperature: temperatureUnit === 'fahrenheit' ? Math.round(toCelsius(raw)) : raw });
-                }}
-                className="flex-1 accent-primary"
-              />
-              <span className="text-sm font-medium w-14 text-right">{formatTemp(weather.temperature, temperatureUnit)}</span>
-            </div>
-          )}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
   );
 }
 
@@ -461,7 +357,6 @@ export default function SuggestPage() {
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
   const [outfitCount, setOutfitCount] = useState(3);
   const [occasionInitialized, setOccasionInitialized] = useState(false);
-  const [weatherOverride, setWeatherOverride] = useState<WeatherOverride | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -591,14 +486,6 @@ export default function SuggestPage() {
                   onSelect={setSelectedOccasion}
                 />
               </div>
-
-              {/* Weather override (collapsible) */}
-              <WeatherOverrideSection
-                weather={weatherOverride}
-                onChange={setWeatherOverride}
-                temperatureUnit={temperatureUnit}
-                t={t}
-              />
 
               {/* Generate button */}
               <div className="pt-2">

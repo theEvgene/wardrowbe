@@ -125,10 +125,17 @@ async def test_upload_tag_extract_detect_style_and_persist_exact_batch(
                 auto_extract=True,
             )
 
-    assert worker_redis.enqueue_job.await_count == 6
+    # The bundled extraction model supports upper/lower garments. Shoes remain
+    # usable in outfit generation, but must not be sent through an unsafe mask.
+    assert worker_redis.enqueue_job.await_count == 4
     assert all(
         call.args[0] == "extract_item_garment" for call in worker_redis.enqueue_job.await_args_list
     )
+    assert {call.args[1] for call in worker_redis.enqueue_job.await_args_list} == {
+        item["id"]
+        for item, item_type in zip(uploaded_items, item_types, strict=True)
+        if item_type in {"shirt", "pants"}
+    }
 
     async def accepted_cutout(image_path: str, item_type: str) -> dict[str, object]:
         stem = image_path.rsplit(".", 1)[0]

@@ -46,6 +46,7 @@ const duplicate = item('item-duplicate', 'shirt', 'Same blue shirt', 'blue');
 const pants = item('item-pants', 'pants', 'Beige pants', 'beige');
 const shoes = item('item-shoes', 'shoes', 'White shoes', 'white');
 const secondShirt = item('item-second-shirt', 'shirt', 'Green shirt', 'green');
+const uploaded = item('item-uploaded', 'shirt', 'Uploaded smoke shirt', 'blue');
 
 const pairing = {
   id: 'pairing-1',
@@ -160,13 +161,15 @@ async function installApiContract(page: Page) {
       item_high: duplicate,
     },
   ];
+  let wardrobeItems = [source, duplicate, secondShirt, pants, shoes];
+  let onboardingCompleted = false;
 
   await page.route('**/api/auth/session', (route) =>
     route.fulfill({
       json: {
         user: { id: 'user-e2e', name: 'E2E User', email: 'e2e@wardrowbe.test' },
         accessToken: 'e2e-token',
-        onboardingCompleted: true,
+        onboardingCompleted,
         expires: '2099-01-01T00:00:00.000Z',
       },
     }),
@@ -189,8 +192,12 @@ async function installApiContract(page: Page) {
     if (path === '/users/me') {
       return route.fulfill({ json: {
         id: 'user-e2e', email: 'e2e@wardrowbe.test', display_name: 'E2E User',
-        timezone: 'UTC', locale: 'en', role: 'user', onboarding_completed: true,
+        timezone: 'UTC', locale: 'en', role: 'user', onboarding_completed: onboardingCompleted,
       } });
+    }
+    if (path === '/users/me/onboarding/complete' && method === 'POST') {
+      onboardingCompleted = true;
+      return route.fulfill({ json: { onboarding_completed: true } });
     }
     if (path === '/items/tagging-progress') {
       return route.fulfill({ json: { processing: 0, queued: 0, analyzing: 0, failed: 0, completed: 4, total: 4 } });
@@ -201,7 +208,15 @@ async function installApiContract(page: Page) {
       ] });
     }
     if (path === '/items' && method === 'GET') {
-      return route.fulfill({ json: { items: [source, duplicate, secondShirt, pants, shoes], total: 5, page: 1, page_size: 20, has_more: false } });
+      return route.fulfill({ json: { items: wardrobeItems, total: wardrobeItems.length, page: 1, page_size: 20, has_more: false } });
+    }
+    if (path === '/items' && method === 'POST') {
+      const multipart = request.postData() ?? '';
+      expect(multipart).toContain('name="auto_extract"');
+      expect(multipart).toContain('true');
+      expect(multipart).toContain('e2e-upload.jpg');
+      wardrobeItems = [uploaded, ...wardrobeItems];
+      return route.fulfill({ status: 201, json: uploaded });
     }
     if (path === `/items/${source.id}` && method === 'GET') {
       return route.fulfill({ json: source });
@@ -237,6 +252,18 @@ async function installApiContract(page: Page) {
         temperature: 20, feels_like: 20, humidity: 50, precipitation_chance: 0,
         wind_speed: 2, condition: 'clear', condition_code: 0, is_day: true,
       } });
+    }
+    if (path === '/outfits' && method === 'GET') {
+      return route.fulfill({ json: { outfits: [], total: 0, page: 1, page_size: 20, has_more: false } });
+    }
+    if (path === '/notifications/schedules' && method === 'GET') {
+      return route.fulfill({ json: [] });
+    }
+    if (path === '/notifications/settings' && method === 'GET') {
+      return route.fulfill({ json: {} });
+    }
+    if (path === '/analytics' && method === 'GET') {
+      return route.fulfill({ json: {} });
     }
     if (path === '/outfits/generate-by-style' && method === 'POST') {
       expect(request.postDataJSON()).toEqual({
@@ -277,8 +304,34 @@ async function installApiContract(page: Page) {
 test('user reaches a cutout-based composite outfit through the browser happy path', async ({ page }) => {
   const assertCleanBrowserContract = await installApiContract(page);
 
+  await page.goto('/onboarding');
+  await page.getByRole('button', { name: 'Get Started' }).click();
+  for (let step = 0; step < 4; step += 1) {
+    await page.getByRole('button', { name: 'Skip for now' }).click();
+  }
+  await page.getByRole('button', { name: 'Go to Dashboard' }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
   await page.goto('/dashboard/wardrobe');
   await expect(page.getByRole('heading', { name: 'My Wardrobe' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Add Item' }).click();
+  const addDialog = page.getByRole('dialog', { name: 'Add Items' });
+  await addDialog.locator('input[type="file"]').first().setInputFiles({
+    name: 'e2e-upload.jpg',
+    mimeType: 'image/jpeg',
+    buffer: Buffer.from('deterministic-e2e-image'),
+  });
+  await addDialog.getByLabel('Name (optional)').fill(uploaded.name);
+  await expect(
+    addDialog.getByRole('checkbox', {
+      name: 'Automatically isolate the garment after AI analysis',
+    }),
+  ).toBeChecked();
+  await addDialog.getByRole('button', { name: 'Add Item' }).click();
+  await expect(addDialog).toBeHidden();
+  await expect(page.getByText(uploaded.name, { exact: true })).toBeVisible();
+
   await expect(page.getByRole('heading', { name: 'Possible duplicate' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Merge' }).click();

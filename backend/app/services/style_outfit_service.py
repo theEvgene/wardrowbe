@@ -129,10 +129,17 @@ class StyleOutfitService:
         numbers = proposal.get("items")
         if not isinstance(numbers, list) or not numbers:
             raise AIRecommendationError("Each outfit must contain item numbers")
-        try:
-            normalized = [int(number) for number in numbers]
-        except (TypeError, ValueError) as exc:
-            raise AIRecommendationError("Outfit contains a non-numeric item reference") from exc
+        normalized: list[int] = []
+        for number in numbers:
+            if isinstance(number, bool):
+                raise AIRecommendationError("Outfit contains a non-numeric item reference")
+            if isinstance(number, int):
+                normalized.append(number)
+                continue
+            if isinstance(number, str) and re.fullmatch(r"[1-9]\d*", number.strip()):
+                normalized.append(int(number))
+                continue
+            raise AIRecommendationError("Outfit contains a non-numeric item reference")
         if len(normalized) != len(set(normalized)):
             raise AIRecommendationError("Outfit contains the same item more than once")
         if any(number not in number_map for number in normalized):
@@ -177,6 +184,16 @@ class StyleOutfitService:
             safe["highlights"] = [value.strip() for value in highlights]
         return safe
 
+    @staticmethod
+    def _deterministic_copy(selected: list[ClothingItem], target_style: str) -> tuple[str, str]:
+        """Build visible copy exclusively from validated wardrobe metadata."""
+
+        style_label = target_style.replace("-", " ").title()
+        item_labels = [
+            " ".join(part for part in (item.primary_color, item.type) if part) for item in selected
+        ]
+        return f"{style_label} outfit", f"Wear together: {', '.join(item_labels)}."
+
     async def generate(
         self,
         *,
@@ -186,6 +203,8 @@ class StyleOutfitService:
         occasion: str = "casual",
         scheduled_date: date | None = None,
     ) -> list[Outfit]:
+        """Generate, validate, and atomically persist an exact style-driven outfit batch."""
+
         require_internal_ai("text")
         target_style = target_style.strip().lower()
         candidates = await self._candidates(user.id)
@@ -271,13 +290,14 @@ class StyleOutfitService:
         created: list[Outfit] = []
         try:
             for index, (proposal, selected, model, endpoint) in enumerate(accepted):
+                reasoning, style_notes = self._deterministic_copy(selected, target_style)
                 outfit = Outfit(
                     user_id=user.id,
                     occasion=occasion,
                     target_style=target_style,
                     scheduled_for=scheduled_date or get_user_today(user),
-                    reasoning=proposal.get("headline") or proposal.get("reasoning"),
-                    style_notes=proposal.get("styling_tip") or proposal.get("style_notes"),
+                    reasoning=reasoning,
+                    style_notes=style_notes,
                     ai_raw_response={
                         **proposal,
                         "_ai_model": model,
