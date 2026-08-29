@@ -245,6 +245,7 @@ class OutfitListResponse(BaseModel):
 
 class StyleBatchResponse(BaseModel):
     outfits: list[OutfitResponse]
+    model: str | None = None
 
 
 class BulkOutfitFilters(BaseModel):
@@ -573,7 +574,8 @@ async def generate_outfits_by_style(
                 is_starter_suggestion=is_starter,
             )
             for outfit in outfits
-        ]
+        ],
+        model=(outfits[0].ai_raw_response or {}).get("_ai_model") if outfits else None,
     )
 
 

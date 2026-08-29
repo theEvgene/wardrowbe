@@ -21,6 +21,7 @@ const pageErrors = [];
 let accessToken;
 const itemIds = [];
 let pairingId;
+const outfitIds = [];
 let metricsBefore;
 
 page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -44,14 +45,15 @@ async function api(path, { method = 'GET', json } = {}) {
   );
 }
 
-async function uploadItem({ bytes, filename, type, name }) {
+async function uploadItem({ bytes, filename, type, name, skipAi = true, autoExtract = true }) {
   const created = await page.evaluate(
-    async ({ bytes, filename, type, name, accessToken }) => {
+    async ({ bytes, filename, type, name, skipAi, autoExtract, accessToken }) => {
       const form = new FormData();
       form.append('image', new Blob([new Uint8Array(bytes)], { type: 'image/jpeg' }), filename);
       form.append('type', type);
       form.append('name', name);
-      form.append('skip_ai', 'true');
+      form.append('skip_ai', String(skipAi));
+      form.append('auto_extract', String(autoExtract));
       const response = await fetch('/api/v1/items', {
         method: 'POST',
         credentials: 'include',
@@ -60,27 +62,50 @@ async function uploadItem({ bytes, filename, type, name }) {
       });
       return { ok: response.ok, status: response.status, body: await response.json().catch(() => null) };
     },
-    { bytes: Array.from(bytes), filename, type, name, accessToken },
+    { bytes: Array.from(bytes), filename, type, name, skipAi, autoExtract, accessToken },
   );
   assert.equal(created.ok, true, `Upload failed: ${created.status} ${JSON.stringify(created.body)}`);
   itemIds.push(created.body.id);
   return created.body;
 }
 
-async function confirmMetadata(item, { type, primaryColor }) {
+async function confirmMetadata(item, { type, primaryColor, style = 'casual' }) {
   const reviewed = await api(`/items/${item.id}`, {
     method: 'PATCH',
     json: {
       type,
       primary_color: primaryColor,
       colors: [primaryColor],
-      confirm_fields: ['type', 'primary_color', 'colors'],
+      style: [style],
+      confirm_fields: ['type', 'primary_color', 'colors', 'style'],
     },
   });
   assert.equal(reviewed.ok, true, `Metadata review failed: ${reviewed.status}`);
   assert.equal(reviewed.body.field_metadata?.type?.provenance, 'user_confirmed');
   assert.equal(reviewed.body.field_metadata?.primary_color?.provenance, 'user_confirmed');
   return reviewed.body;
+}
+
+async function waitForAutomaticProcessing(itemId) {
+  const deadline = Date.now() + 5 * 60_000;
+  let current;
+  do {
+    const response = await api(`/items/${itemId}`);
+    assert.equal(response.ok, true, `Item processing lookup failed: ${response.status}`);
+    current = response.body;
+    if (current.status === 'error') {
+      throw new Error(`Automatic AI processing failed: ${JSON.stringify(current.ai_raw_response)}`);
+    }
+    if (
+      current.status === 'ready' &&
+      current.tagging_status === 'tagged' &&
+      current.background_removal?.outcome
+    ) {
+      return current;
+    }
+    await page.waitForTimeout(2_000);
+  } while (Date.now() < deadline);
+  throw new Error(`Automatic tagging/extraction timed out: ${JSON.stringify(current)}`);
 }
 
 async function visuallyDistinctReencode(bytes) {
@@ -101,6 +126,12 @@ async function visuallyDistinctReencode(bytes) {
 }
 
 async function cleanupInterruptedSmokeRun() {
+  const outfits = await api('/outfits?page_size=100&source=on_demand');
+  if (outfits.ok) {
+    for (const outfit of outfits.body.outfits || []) {
+      await api(`/outfits/${outfit.id}`, { method: 'DELETE' });
+    }
+  }
   const pairings = await api('/pairings?page_size=100');
   if (pairings.ok) {
     for (const pairing of pairings.body.pairings || []) {
@@ -161,21 +192,19 @@ try {
     filename: 'smoke-worn-person.jpg',
     type: 'shirt',
     name: 'Full-stack smoke garment',
+    skipAi: false,
+    autoExtract: true,
   });
+  source = await waitForAutomaticProcessing(source.id);
+  assert.equal(source.tagged_by, 'auto');
+  assert.equal(source.background_removal?.outcome, 'accepted');
+  assert.ok(source.background_removal?.transparent_path);
   source = await confirmMetadata(source, { type: 'shirt', primaryColor: 'blue' });
 
   await page.goto(`${baseUrl}/dashboard/wardrobe?item=${source.id}`, { waitUntil: 'networkidle' });
   await page.getByRole('dialog').getByText('Full-stack smoke garment', { exact: true }).waitFor();
 
-  const extraction = await api(`/items/${source.id}/remove-background`, {
-    method: 'POST',
-    json: { mode: 'garment', bg_color: '#FFFFFF' },
-  });
-  assert.equal(
-    extraction.ok,
-    true,
-    `Garment extraction failed: ${extraction.status} ${JSON.stringify(extraction.body)}`,
-  );
+  const extraction = { body: source };
   assert.equal(extraction.body.background_removal?.outcome, 'accepted');
   assert.equal(extraction.body.background_removal?.garment_category, 'upper');
   assert.ok(
@@ -284,6 +313,43 @@ try {
     'Accepted extraction was not reflected in shared metrics',
   );
 
+  const detectedStyles = await api('/styles/detected');
+  assert.equal(detectedStyles.ok, true, `Detected styles failed: ${detectedStyles.status}`);
+  const casualStyle = detectedStyles.body.styles.find((entry) => entry.style === 'casual');
+  assert.ok(casualStyle, `Casual style was not detected: ${JSON.stringify(detectedStyles.body)}`);
+  assert.ok(casualStyle.item_count >= 4, 'Detected casual style count did not match smoke wardrobe');
+
+  await page.goto(`${baseUrl}/dashboard/suggest`, { waitUntil: 'networkidle' });
+  await page.locator('button[aria-pressed]').filter({ hasText: 'casual' }).click();
+  await page.getByLabel('Number of outfits').fill('2');
+  await page.locator('button[data-selected]').filter({ hasText: 'Casual' }).click();
+  const generationStartedAt = Date.now();
+  const [generationResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/v1/outfits/generate-by-style') &&
+        response.request().method() === 'POST',
+      { timeout: 5 * 60_000 },
+    ),
+    page.getByRole('button', { name: 'Get Suggestion' }).click(),
+  ]);
+  const generationLatencyMs = Date.now() - generationStartedAt;
+  assert.equal(generationResponse.ok(), true, `Style generation failed: ${generationResponse.status()}`);
+  const generatedBatch = await generationResponse.json();
+  assert.equal(generatedBatch.outfits.length, 2, 'Real model did not return exactly two outfits');
+  assert.match(generatedBatch.model || '', /gemma3:4b/i, 'Unexpected local text model');
+  const activeItemIds = new Set(itemIds);
+  for (const outfit of generatedBatch.outfits) {
+    outfitIds.push(outfit.id);
+    assert.equal(outfit.target_style, 'casual');
+    assert.ok(outfit.items.every((item) => activeItemIds.has(item.id)));
+    const types = new Set(outfit.items.map((item) => item.type));
+    assert.ok(types.has('shoes'));
+    assert.ok(types.has('dress') || (types.has('shirt') && types.has('pants')));
+  }
+  await page.getByTestId('outfit-composite').first().waitFor();
+  assert.equal(await page.getByTestId('outfit-composite').count(), 2);
+
   assert.deepEqual(pageErrors, [], `Browser errors: ${pageErrors.join('; ')}`);
   console.log(
     JSON.stringify({
@@ -297,9 +363,21 @@ try {
       duplicate_model: duplicateMatch.evidence?.visual?.model,
       duplicate_decision: duplicateDecision.body.status,
       composite_items: pairing.body.items.length,
+      detected_styles: detectedStyles.body.styles,
+      style_generation_model: generatedBatch.model,
+      style_generation_latency_ms: generationLatencyMs,
+      generated_outfits: generatedBatch.outfits.length,
     }),
   );
 } finally {
+  if (accessToken) {
+    for (const outfitId of outfitIds.reverse()) {
+      const deletedOutfit = await api(`/outfits/${outfitId}`, { method: 'DELETE' }).catch(() => null);
+      if (!deletedOutfit?.ok) {
+        console.error(`Smoke cleanup failed for outfit ${outfitId}`);
+      }
+    }
+  }
   if (accessToken && pairingId) {
     const deletedPairing = await api(`/pairings/${pairingId}`, { method: 'DELETE' }).catch(() => null);
     if (!deletedPairing?.ok) {

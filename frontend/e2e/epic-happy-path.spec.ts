@@ -14,10 +14,10 @@ function item(id: string, type: string, name: string, color: string) {
     thumbnail_path: image(id),
     image_url: image(id),
     thumbnail_url: image(id),
-    tags: { colors: [color], style: [], season: [] },
+    tags: { colors: [color], style: ['casual'], season: [] },
     colors: [color],
     primary_color: color,
-    style: [],
+    style: ['casual'],
     season: [],
     status: 'ready',
     ai_processed: true,
@@ -45,6 +45,7 @@ const source = item('item-source', 'shirt', 'Blue shirt', 'blue');
 const duplicate = item('item-duplicate', 'shirt', 'Same blue shirt', 'blue');
 const pants = item('item-pants', 'pants', 'Beige pants', 'beige');
 const shoes = item('item-shoes', 'shoes', 'White shoes', 'white');
+const secondShirt = item('item-second-shirt', 'shirt', 'Green shirt', 'green');
 
 const pairing = {
   id: 'pairing-1',
@@ -109,6 +110,36 @@ const pairing = {
   created_at: now,
 };
 
+const secondStyleOutfit = {
+  ...pairing,
+  id: 'style-outfit-2',
+  source: 'on_demand',
+  target_style: 'casual',
+  source_item: null,
+  reasoning: 'Green shirt with beige pants and white shoes',
+  items: [
+    {
+      ...pairing.items[0],
+      id: secondShirt.id,
+      name: secondShirt.name,
+      image_path: secondShirt.image_path,
+      image_url: secondShirt.image_url,
+      thumbnail_url: secondShirt.thumbnail_url,
+      transparent_url: image('second-shirt-cutout'),
+    },
+    pairing.items[1],
+    pairing.items[2],
+  ],
+};
+
+const firstStyleOutfit = {
+  ...pairing,
+  id: 'style-outfit-1',
+  source: 'on_demand',
+  target_style: 'casual',
+  source_item: null,
+};
+
 async function installApiContract(page: Page) {
   const unexpectedRequests: string[] = [];
   const pageErrors: string[] = [];
@@ -166,11 +197,11 @@ async function installApiContract(page: Page) {
     }
     if (path === '/items/types') {
       return route.fulfill({ json: [
-        { type: 'shirt', count: 2 }, { type: 'pants', count: 1 }, { type: 'shoes', count: 1 },
+        { type: 'shirt', count: 3 }, { type: 'pants', count: 1 }, { type: 'shoes', count: 1 },
       ] });
     }
     if (path === '/items' && method === 'GET') {
-      return route.fulfill({ json: { items: [source, duplicate, pants, shoes], total: 4, page: 1, page_size: 20, has_more: false } });
+      return route.fulfill({ json: { items: [source, duplicate, secondShirt, pants, shoes], total: 5, page: 1, page_size: 20, has_more: false } });
     }
     if (path === `/items/${source.id}` && method === 'GET') {
       return route.fulfill({ json: source });
@@ -194,6 +225,24 @@ async function installApiContract(page: Page) {
     }
     if (path === '/health/features') {
       return route.fulfill({ json: { background_removal: true } });
+    }
+    if (path === '/styles/detected' && method === 'GET') {
+      return route.fulfill({ json: { styles: [{ style: 'casual', item_count: 4 }] } });
+    }
+    if (path === '/users/me/preferences' && method === 'GET') {
+      return route.fulfill({ json: { default_occasion: null, temperature_unit: 'celsius' } });
+    }
+    if (path === '/weather/current' && method === 'GET') {
+      return route.fulfill({ json: {
+        temperature: 20, feels_like: 20, humidity: 50, precipitation_chance: 0,
+        wind_speed: 2, condition: 'clear', condition_code: 0, is_day: true,
+      } });
+    }
+    if (path === '/outfits/generate-by-style' && method === 'POST') {
+      expect(request.postDataJSON()).toEqual({
+        target_style: 'casual', count: 2, occasion: 'casual',
+      });
+      return route.fulfill({ json: { outfits: [firstStyleOutfit, secondStyleOutfit] } });
     }
     if (path === `/items/${source.id}/remove-background` && method === 'POST') {
       expect(request.postDataJSON()).toMatchObject({ mode: 'garment' });
@@ -254,5 +303,15 @@ test('user reaches a cutout-based composite outfit through the browser happy pat
   await expect(page.getByTestId(`outfit-item-${source.id}`)).toHaveAttribute('data-image-kind', 'cutout');
   await expect(page.getByTestId(`outfit-item-${pants.id}`)).toHaveAttribute('data-image-kind', 'photo');
   await expect(page.getByTestId(`outfit-item-${shoes.id}`)).toHaveAttribute('data-image-kind', 'photo');
+
+  await page.goto('/dashboard/suggest');
+  await page.locator('button[aria-pressed]').filter({ hasText: 'casual' }).click();
+  await page.getByLabel('Number of outfits').fill('2');
+  await page.locator('button[data-selected]').filter({ hasText: 'Casual' }).click();
+  await page.getByRole('button', { name: 'Get Suggestion' }).click();
+
+  await expect(page.getByTestId('outfit-composite')).toHaveCount(2);
+  await expect(page.getByText(firstStyleOutfit.reasoning)).toBeVisible();
+  await expect(page.getByText(secondStyleOutfit.reasoning)).toBeVisible();
   assertCleanBrowserContract();
 });

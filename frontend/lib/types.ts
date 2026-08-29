@@ -446,6 +446,7 @@ export interface StyleBatchRequest {
 
 export interface StyleBatchResponse {
   outfits: Outfit[];
+  model?: string | null;
 }
 
 // Pairing types
