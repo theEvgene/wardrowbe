@@ -1,5 +1,5 @@
 import logging
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -41,7 +41,7 @@ from app.services.studio_service import (
 )
 from app.services.style_outfit_service import StyleContextError, StyleOutfitService
 from app.services.suggestion_cache import clear_suggestions
-from app.services.weather_service import WeatherData
+from app.services.weather_service import WeatherData, WeatherService, WeatherServiceError
 from app.utils.auth import get_current_user
 from app.utils.rate_limit import rate_limit_by_user
 from app.utils.signed_urls import sign_image_url
@@ -80,6 +80,56 @@ def get_user_today(user: User) -> date:
     except Exception:
         user_tz = ZoneInfo("UTC")
     return datetime.now(UTC).astimezone(user_tz).date()
+
+
+async def resolve_style_weather(user: User, scheduled_for: date) -> WeatherData:
+    """Resolve one deterministic weather snapshot for a style-generation batch."""
+
+    weather_service = WeatherService()
+    lat = user.location_lat
+    lon = user.location_lon
+    if lat is None and lon is None and user.location_name:
+        try:
+            geocoded = await weather_service.geocode_location_name(user.location_name)
+        except WeatherServiceError as exc:
+            raise StyleContextError("weather_unavailable", str(exc)) from None
+        if geocoded:
+            lat, lon, _ = geocoded
+    if lat is None or lon is None:
+        raise StyleContextError(
+            "location_not_set",
+            "Set a saved location before generating a weather-aware outfit",
+        )
+
+    try:
+        if scheduled_for == get_user_today(user):
+            return await weather_service.get_current_weather(float(lat), float(lon))
+
+        days = (scheduled_for - get_user_today(user)).days + 1
+        forecasts = await weather_service.get_daily_forecast(float(lat), float(lon), days)
+    except WeatherServiceError as exc:
+        raise StyleContextError("weather_unavailable", str(exc)) from None
+
+    forecast = next((entry for entry in forecasts if entry.date == scheduled_for.isoformat()), None)
+    if forecast is None:
+        raise StyleContextError(
+            "weather_unavailable",
+            "Weather forecast is unavailable for the selected date",
+        )
+    average_temperature = round((forecast.temp_min + forecast.temp_max) / 2, 1)
+    return WeatherData(
+        temperature=average_temperature,
+        feels_like=round(forecast.temp_max, 1),
+        humidity=50,
+        precipitation_chance=forecast.precipitation_chance,
+        precipitation_mm=0,
+        wind_speed=0,
+        condition=forecast.condition,
+        condition_code=forecast.condition_code,
+        is_day=True,
+        uv_index=0,
+        timestamp=datetime.combine(scheduled_for, time(hour=12)),
+    )
 
 
 router = APIRouter(prefix="/outfits", tags=["Outfits"])
@@ -608,6 +658,7 @@ async def generate_outfits_by_style(
         "constraints": request.constraints.model_dump(mode="json"),
     }
     try:
+        weather = await resolve_style_weather(current_user, scheduled_for)
         outfits = await StyleOutfitService(db).generate(
             user=current_user,
             target_style=request.target_style,
@@ -615,10 +666,15 @@ async def generate_outfits_by_style(
             occasion=request.occasion,
             scheduled_date=scheduled_for,
             generation_context=generation_context,
+            weather_data=weather.to_dict(),
         )
     except StyleContextError as exc:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=(
+                status.HTTP_503_SERVICE_UNAVAILABLE
+                if exc.code == "weather_unavailable"
+                else status.HTTP_400_BAD_REQUEST
+            ),
             detail={"code": exc.code, "message": exc.message},
         ) from None
     except InsufficientWardrobeError as exc:

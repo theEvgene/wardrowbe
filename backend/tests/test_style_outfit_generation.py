@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -14,6 +14,7 @@ from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import Outfit
 from app.services.recommendation_service import AIRecommendationError
 from app.services.style_outfit_service import StyleOutfitService
+from app.services.weather_service import DailyForecast, WeatherData
 
 
 class TestStyleBatchRequest:
@@ -93,6 +94,31 @@ class PromptAwareAI:
         )
 
 
+def _weather_snapshot(temperature: float = 18.0) -> WeatherData:
+    return WeatherData(
+        temperature=temperature,
+        feels_like=temperature - 1,
+        humidity=60,
+        precipitation_chance=20,
+        precipitation_mm=0,
+        wind_speed=8,
+        condition="partly cloudy",
+        condition_code=2,
+        is_day=True,
+        uv_index=2,
+        timestamp=datetime(2026, 8, 30, 12, 0, 0),
+    )
+
+
+class CurrentWeatherStub:
+    calls = 0
+
+    async def get_current_weather(self, latitude: float, longitude: float):
+        type(self).calls += 1
+        assert (latitude, longitude) == (55.75, 37.62)
+        return _weather_snapshot()
+
+
 class TestStyleOutfitService:
     def test_accepts_a_top_level_json_array_from_local_models(self) -> None:
         proposals = StyleOutfitService._parse('[{"items":[1,2,3]}]')
@@ -160,6 +186,10 @@ class TestStyleOutfitService:
         )
         await db_session.commit()
         monkeypatch.setattr("app.services.style_outfit_service.AIService", PromptAwareAI)
+        test_user.location_lat = 55.75
+        test_user.location_lon = 37.62
+        CurrentWeatherStub.calls = 0
+        monkeypatch.setattr("app.api.outfits.WeatherService", CurrentWeatherStub)
 
         response = await client.post(
             "/api/v1/outfits/generate-by-style",
@@ -190,7 +220,28 @@ class TestStyleOutfitService:
         db_session.add_all(wardrobe)
         await db_session.commit()
         monkeypatch.setattr("app.services.style_outfit_service.AIService", PromptAwareAI)
+        test_user.location_lat = 55.75
+        test_user.location_lon = 37.62
         scheduled_for = date.today() + timedelta(days=1)
+
+        class ForecastWeatherStub:
+            calls: list[tuple[float, float, int]] = []
+
+            async def get_daily_forecast(self, latitude: float, longitude: float, days: int):
+                type(self).calls.append((latitude, longitude, days))
+                return [
+                    DailyForecast(
+                        date=(date.today() + timedelta(days=index)).isoformat(),
+                        temp_min=10 + index,
+                        temp_max=20 + index,
+                        precipitation_chance=30,
+                        condition="cloudy",
+                        condition_code=3,
+                    )
+                    for index in range(days)
+                ]
+
+        monkeypatch.setattr("app.api.outfits.WeatherService", ForecastWeatherStub)
 
         response = await client.post(
             "/api/v1/outfits/generate-by-style",
@@ -212,6 +263,8 @@ class TestStyleOutfitService:
         assert response.status_code == 200, response.json()
         outfit = response.json()["outfits"][0]
         assert outfit["scheduled_for"] == scheduled_for.isoformat()
+        assert outfit["weather"]["temperature"] == 16.0
+        assert ForecastWeatherStub.calls == [(55.75, 37.62, 2)]
         assert outfit["generation_context"] == {
             "time_of_day": "evening",
             "activity": "Dinner with friends",
@@ -268,6 +321,9 @@ class TestStyleOutfitService:
         db_session.add_all([*wardrobe, archived])
         await db_session.commit()
         monkeypatch.setattr("app.services.style_outfit_service.AIService", PromptAwareAI)
+        test_user.location_lat = 55.75
+        test_user.location_lon = 37.62
+        monkeypatch.setattr("app.api.outfits.WeatherService", CurrentWeatherStub)
 
         response = await client.post(
             "/api/v1/outfits/generate-by-style",
@@ -281,6 +337,70 @@ class TestStyleOutfitService:
 
         assert response.status_code == 400
         assert response.json()["detail"]["code"] == "constraint_item_unavailable"
+
+    @pytest.mark.asyncio
+    async def test_public_endpoint_uses_one_weather_snapshot_for_the_atomic_batch(
+        self, client, auth_headers, db_session: AsyncSession, test_user, monkeypatch
+    ) -> None:
+        await _add_generation_wardrobe(db_session, test_user.id)
+        test_user.location_lat = 55.75
+        test_user.location_lon = 37.62
+        CurrentWeatherStub.calls = 0
+        monkeypatch.setattr("app.api.outfits.WeatherService", CurrentWeatherStub)
+        monkeypatch.setattr("app.services.style_outfit_service.AIService", PromptAwareAI)
+
+        response = await client.post(
+            "/api/v1/outfits/generate-by-style",
+            json={"target_style": "casual", "count": 2},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200, response.json()
+        snapshots = [outfit["weather"] for outfit in response.json()["outfits"]]
+        assert snapshots == [_weather_snapshot().to_dict(), _weather_snapshot().to_dict()]
+        assert CurrentWeatherStub.calls == 1
+
+    @pytest.mark.asyncio
+    async def test_public_endpoint_requires_a_saved_location(
+        self, client, auth_headers, test_user
+    ) -> None:
+        test_user.location_lat = None
+        test_user.location_lon = None
+        test_user.location_name = None
+
+        response = await client.post(
+            "/api/v1/outfits/generate-by-style",
+            json={"target_style": "casual"},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "location_not_set"
+
+    @pytest.mark.asyncio
+    async def test_public_endpoint_reports_an_unavailable_selected_date_forecast(
+        self, client, auth_headers, test_user, monkeypatch
+    ) -> None:
+        test_user.location_lat = 55.75
+        test_user.location_lon = 37.62
+
+        class MissingForecastStub:
+            async def get_daily_forecast(self, latitude: float, longitude: float, days: int):
+                return []
+
+        monkeypatch.setattr("app.api.outfits.WeatherService", MissingForecastStub)
+
+        response = await client.post(
+            "/api/v1/outfits/generate-by-style",
+            json={
+                "target_style": "casual",
+                "scheduled_for": (date.today() + timedelta(days=1)).isoformat(),
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 503
+        assert response.json()["detail"]["code"] == "weather_unavailable"
 
     @pytest.mark.asyncio
     async def test_generates_and_atomically_persists_exactly_n_complete_outfits(

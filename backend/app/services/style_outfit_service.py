@@ -200,6 +200,7 @@ class StyleOutfitService:
         occasion: str = "casual",
         scheduled_date: date | None = None,
         generation_context: dict | None = None,
+        weather_data: dict | None = None,
     ) -> list[Outfit]:
         """Generate, validate, and atomically persist an exact style-driven outfit batch."""
 
@@ -314,6 +315,7 @@ class StyleOutfitService:
                     target_style=target_style,
                     scheduled_for=scheduled_date or get_user_today(user),
                     generation_context=context,
+                    weather_data=weather_data,
                     ai_raw_response={
                         **proposal,
                         "_ai_model": model,
