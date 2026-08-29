@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.outfits import StyleBatchRequest
 from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import Outfit
+from app.services.recommendation_service import AIRecommendationError
 from app.services.style_outfit_service import StyleOutfitService
 
 
@@ -172,3 +173,121 @@ class TestStyleOutfitService:
                 count=1,
                 occasion="casual",
             )
+
+
+async def _add_generation_wardrobe(db_session: AsyncSession, user_id) -> None:
+    db_session.add_all(
+        [
+            ClothingItem(
+                user_id=user_id,
+                type=item_type,
+                image_path=f"test/{uuid4()}.jpg",
+                status=ItemStatus.ready,
+                style=["casual"],
+            )
+            for item_type in ["shirt", "shirt", "pants", "pants", "shoes", "shoes"]
+        ]
+    )
+    await db_session.commit()
+
+
+class TestAdversarialStyleGeneration:
+    @pytest.mark.asyncio
+    async def test_recovers_on_a_bounded_follow_up_attempt(
+        self, db_session: AsyncSession, test_user, monkeypatch
+    ) -> None:
+        await _add_generation_wardrobe(db_session, test_user.id)
+
+        class RecoveringAI(PromptAwareAI):
+            calls = 0
+
+            async def generate_text(self, prompt: str, return_metadata: bool = False):
+                type(self).calls += 1
+                if type(self).calls == 1:
+                    return SimpleNamespace(
+                        content='{"outfits":[', model="test", endpoint="local-test"
+                    )
+                return await super().generate_text(prompt, return_metadata)
+
+        monkeypatch.setattr("app.services.style_outfit_service.AIService", RecoveringAI)
+
+        outfits = await StyleOutfitService(db_session).generate(
+            user=test_user,
+            target_style="casual",
+            count=2,
+            occasion="casual",
+        )
+
+        assert len(outfits) == 2
+        assert RecoveringAI.calls == 2
+
+    @pytest.mark.parametrize(
+        "response_kind",
+        ["malformed", "truncated", "unknown-id", "incomplete", "duplicate-sets", "unsafe-copy"],
+    )
+    @pytest.mark.asyncio
+    async def test_rejects_adversarial_responses_without_partial_persistence(
+        self, response_kind: str, db_session: AsyncSession, test_user, monkeypatch
+    ) -> None:
+        await _add_generation_wardrobe(db_session, test_user.id)
+
+        class AdversarialAI:
+            calls = 0
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def generate_text(self, prompt: str, return_metadata: bool = False):
+                type(self).calls += 1
+                matches = re.findall(r"\[(\d+)\] type=([^ |\n]+)", prompt)
+                by_type = {
+                    item_type: [
+                        int(number)
+                        for number, candidate_type in matches
+                        if candidate_type == item_type
+                    ]
+                    for item_type in {match[1] for match in matches}
+                }
+                valid = [by_type["shirt"][0], by_type["pants"][0], by_type["shoes"][0]]
+                content_by_kind = {
+                    "malformed": "not json",
+                    "truncated": '{"outfits":[',
+                    "unknown-id": json.dumps({"outfits": [{"items": [999, *valid[1:]]}]}),
+                    "incomplete": json.dumps(
+                        {"outfits": [{"items": [by_type["shirt"][0], by_type["shoes"][0]]}]}
+                    ),
+                    "duplicate-sets": json.dumps({"outfits": [{"items": valid}, {"items": valid}]}),
+                    "unsafe-copy": json.dumps(
+                        {"outfits": [{"items": valid, "headline": "x" * 2500}]}
+                    ),
+                }
+                return SimpleNamespace(
+                    content=content_by_kind[response_kind],
+                    model="test",
+                    endpoint="local-test",
+                )
+
+        monkeypatch.setattr("app.services.style_outfit_service.AIService", AdversarialAI)
+
+        with pytest.raises(AIRecommendationError, match="after 3 attempts"):
+            await StyleOutfitService(db_session).generate(
+                user=test_user,
+                target_style="casual",
+                count=2,
+                occasion="casual",
+            )
+
+        assert AdversarialAI.calls == 3
+        persisted = list(
+            (
+                await db_session.execute(
+                    select(Outfit).where(
+                        Outfit.user_id == test_user.id,
+                        Outfit.target_style == "casual",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert persisted == []

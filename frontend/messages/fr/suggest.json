@@ -68,6 +68,7 @@
     "title": "Tenue {occasion}",
     "viewItemDetails": "Voir les détails de l'article"
   },
+  "retryGeneration": "Relancer la génération",
   "startOver": "Recommencer",
   "subtitle": "Trouvons la tenue parfaite pour votre journée",
   "tip": "Conseil :",

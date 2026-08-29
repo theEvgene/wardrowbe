@@ -22,6 +22,9 @@ from app.services.recommendation_service import AIRecommendationError, Insuffici
 from app.utils.clothing import ITEM_ROLE, canonical_item_order
 from app.utils.timezone import get_user_today
 
+MAX_GENERATION_ATTEMPTS = 3
+MAX_VISIBLE_TEXT_LENGTH = 2000
+
 
 class StyleOutfitService:
     def __init__(self, db: AsyncSession):
@@ -107,6 +110,31 @@ class StyleOutfitService:
             raise AIRecommendationError("Full-body and separates cannot be combined")
         return selected
 
+    @staticmethod
+    def _validated_proposal(proposal: object) -> dict:
+        if not isinstance(proposal, dict):
+            raise AIRecommendationError("Each outfit proposal must be an object")
+        safe: dict[str, object] = {"items": proposal.get("items")}
+        for field in ("headline", "reasoning", "styling_tip", "style_notes"):
+            value = proposal.get(field)
+            if value is None:
+                continue
+            if not isinstance(value, str) or len(value.strip()) > MAX_VISIBLE_TEXT_LENGTH:
+                raise AIRecommendationError(f"Outfit {field} is invalid or too long")
+            safe[field] = value.strip()
+        highlights = proposal.get("highlights")
+        if highlights is not None:
+            if (
+                not isinstance(highlights, list)
+                or len(highlights) > 10
+                or any(
+                    not isinstance(value, str) or len(value.strip()) > 500 for value in highlights
+                )
+            ):
+                raise AIRecommendationError("Outfit highlights are invalid or too long")
+            safe["highlights"] = [value.strip() for value in highlights]
+        return safe
+
     async def generate(
         self,
         *,
@@ -139,31 +167,62 @@ class StyleOutfitService:
         ai_service = AIService(
             endpoints=preferences.ai_endpoints if preferences and preferences.ai_endpoints else None
         )
-        result = await ai_service.generate_text(
-            self._prompt(candidates, target_style, count, occasion),
-            return_metadata=True,
-        )
-        proposals = self._parse(result.content)
-        if len(proposals) != count:
-            raise AIRecommendationError(f"AI returned {len(proposals)} outfits; expected {count}")
-
         number_map = dict(enumerate(candidates, 1))
-        validated = [self._validate_selection(proposal, number_map) for proposal in proposals]
-        key_piece_sets = [
-            frozenset(
-                item.id
-                for item in selected
-                if ITEM_ROLE.get((item.type or "").lower())
-                not in {"accessory", "socks", "neckwear"}
+        accepted: list[tuple[dict, list[ClothingItem], str, str]] = []
+        accepted_key_sets: set[frozenset[UUID]] = set()
+        validation_errors: list[str] = []
+        base_prompt = self._prompt(candidates, target_style, count, occasion)
+
+        for attempt in range(1, MAX_GENERATION_ATTEMPTS + 1):
+            remaining = count - len(accepted)
+            prompt = base_prompt
+            if attempt > 1:
+                recent_errors = "; ".join(validation_errors[-5:])
+                prompt = (
+                    self._prompt(candidates, target_style, remaining, occasion)
+                    + "\nREPAIR ATTEMPT: Return only new valid outfits. Do not repeat earlier sets. "
+                    + f"Previous validation problems: {recent_errors}"
+                )
+            try:
+                result = await ai_service.generate_text(prompt, return_metadata=True)
+                proposals = self._parse(result.content)
+            except Exception as exc:
+                validation_errors.append(str(exc) or exc.__class__.__name__)
+                continue
+
+            for proposal in proposals:
+                if len(accepted) == count:
+                    break
+                try:
+                    safe_proposal = self._validated_proposal(proposal)
+                    selected = self._validate_selection(safe_proposal, number_map)
+                    key_set = frozenset(
+                        item.id
+                        for item in selected
+                        if ITEM_ROLE.get((item.type or "").lower())
+                        not in {"accessory", "socks", "neckwear"}
+                    )
+                    if key_set in accepted_key_sets:
+                        raise AIRecommendationError("Outfit repeats an existing key-piece set")
+                except AIRecommendationError as exc:
+                    validation_errors.append(str(exc))
+                    continue
+                accepted.append((safe_proposal, selected, result.model, result.endpoint))
+                accepted_key_sets.add(key_set)
+
+            if len(accepted) == count:
+                break
+
+        if len(accepted) != count:
+            details = "; ".join(dict.fromkeys(validation_errors[-5:]))
+            raise AIRecommendationError(
+                f"Could not generate {count} valid diverse outfits after "
+                f"{MAX_GENERATION_ATTEMPTS} attempts. Please retry. Validation: {details}"
             )
-            for selected in validated
-        ]
-        if len(set(key_piece_sets)) != count:
-            raise AIRecommendationError("Generated outfits are not sufficiently diverse")
 
         created: list[Outfit] = []
         try:
-            for index, (proposal, selected) in enumerate(zip(proposals, validated, strict=True)):
+            for index, (proposal, selected, model, endpoint) in enumerate(accepted):
                 outfit = Outfit(
                     user_id=user.id,
                     occasion=occasion,
@@ -173,8 +232,8 @@ class StyleOutfitService:
                     style_notes=proposal.get("styling_tip") or proposal.get("style_notes"),
                     ai_raw_response={
                         **proposal,
-                        "_ai_model": result.model,
-                        "_ai_endpoint": result.endpoint,
+                        "_ai_model": model,
+                        "_ai_endpoint": endpoint,
                         "_batch_index": index,
                     },
                     source=OutfitSource.on_demand,

@@ -19,7 +19,6 @@ import {
   Sun,
   CloudRain,
   Loader2,
-  AlertCircle,
   Thermometer,
   Droplets,
   ChevronDown,
@@ -35,7 +34,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -54,6 +52,7 @@ import { TempUnit, formatTemp, displayValue, toF, toCelsius } from '@/lib/temper
 import { DetectedStyleSelector } from '@/components/detected-style-selector';
 import { OutfitCompositePreview } from '@/components/outfit-composite-preview';
 import { buildStyleBatchRequest } from '@/lib/style-outfits';
+import { StyleGenerationError } from '@/components/style-generation-error';
 
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
@@ -483,6 +482,7 @@ export default function SuggestPage() {
 
     setIsGenerating(true);
     setError(null);
+    setOutfits([]);
 
     try {
       const request = buildStyleBatchRequest(selectedStyle, outfitCount, selectedOccasion);
@@ -550,10 +550,12 @@ export default function SuggestPage() {
       </div>
 
       {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <StyleGenerationError
+          message={error}
+          retryLabel={t('retryGeneration')}
+          retrying={isGenerating}
+          onRetry={handleGenerate}
+        />
       )}
 
       {outfits.length === 0 ? (
