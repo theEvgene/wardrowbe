@@ -1,6 +1,14 @@
 {
   "dismissOutfit": "Ignorer la tenue",
   "error": "Échec de la génération de la suggestion de tenue. Veuillez réessayer.",
+  "detectedStyles": {
+    "description": "Choisissez un style détecté dans votre garde-robe active.",
+    "empty": "Aucun style détecté. Terminez d’abord l’analyse de quelques articles.",
+    "error": "Impossible de charger les styles détectés.",
+    "itemCount": "{count, plural, one {# article} other {# articles}}",
+    "loading": "Chargement des styles détectés",
+    "title": "Styles de votre garde-robe"
+  },
   "feedback": {
     "commentsOptional": "Commentaires (optionnel)",
     "commentsPlaceholder": "Des remarques sur cette tenue ?",

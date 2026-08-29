@@ -1,6 +1,14 @@
 {
   "dismissOutfit": "關閉穿搭",
   "error": "產生穿搭建議失敗，請重試。",
+  "detectedStyles": {
+    "description": "選擇目前衣櫥中偵測到的風格。",
+    "empty": "尚未偵測到風格。請先完成幾件衣物的 AI 分析。",
+    "error": "無法載入偵測到的風格。",
+    "itemCount": "{count} 件",
+    "loading": "正在載入偵測到的風格",
+    "title": "衣櫥中的風格"
+  },
   "feedback": {
     "commentsOptional": "留言（選填）",
     "commentsPlaceholder": "對這套穿搭有什麼想法？",

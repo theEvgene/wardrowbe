@@ -1,6 +1,14 @@
 {
   "dismissOutfit": "Dismiss outfit",
   "error": "Failed to generate outfit suggestion. Please try again.",
+  "detectedStyles": {
+    "description": "Choose a style found in your active wardrobe.",
+    "empty": "No styles have been detected yet. Finish AI analysis on a few items first.",
+    "error": "Detected styles could not be loaded.",
+    "itemCount": "{count, plural, one {# item} other {# items}}",
+    "loading": "Loading detected styles",
+    "title": "Styles in your wardrobe"
+  },
   "feedback": {
     "commentsOptional": "Comments (optional)",
     "commentsPlaceholder": "Any thoughts about this outfit?",

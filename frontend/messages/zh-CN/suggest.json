@@ -1,6 +1,14 @@
 {
   "dismissOutfit": "关闭穿搭",
   "error": "生成穿搭建议失败，请重试。",
+  "detectedStyles": {
+    "description": "选择当前衣橱中检测到的风格。",
+    "empty": "尚未检测到风格。请先完成几件衣物的 AI 分析。",
+    "error": "无法加载检测到的风格。",
+    "itemCount": "{count} 件",
+    "loading": "正在加载检测到的风格",
+    "title": "衣橱中的风格"
+  },
   "feedback": {
     "commentsOptional": "评论（选填）",
     "commentsPlaceholder": "对这套穿搭有什么想法？",

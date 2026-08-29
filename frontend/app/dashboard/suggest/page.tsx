@@ -49,6 +49,7 @@ import { useWeather, Weather } from '@/lib/hooks/use-weather';
 import { usePreferences } from '@/lib/hooks/use-preferences';
 import { cn } from '@/lib/utils';
 import { TempUnit, formatTemp, displayValue, toF, toCelsius } from '@/lib/temperature';
+import { DetectedStyleSelector } from '@/components/detected-style-selector';
 
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
@@ -453,6 +454,7 @@ export default function SuggestPage() {
   const { data: prefs } = usePreferences();
   const temperatureUnit: TempUnit = prefs?.temperature_unit === 'fahrenheit' ? 'fahrenheit' : 'celsius';
   const [selectedOccasion, setSelectedOccasion] = useState<string | null>(null);
+  const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
   const [occasionInitialized, setOccasionInitialized] = useState(false);
   const [weatherOverride, setWeatherOverride] = useState<WeatherOverride | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -574,6 +576,8 @@ export default function SuggestPage() {
           {/* Main selection card */}
           <Card>
             <CardContent className="p-6 space-y-6">
+              <DetectedStyleSelector selected={selectedStyle} onSelect={setSelectedStyle} />
+
               {/* Occasion selection */}
               <div className="space-y-3">
                 <h2 className="font-semibold">{t('occasionPrompt')}</h2>

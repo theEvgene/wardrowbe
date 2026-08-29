@@ -1,6 +1,14 @@
 {
   "dismissOutfit": "このコーデを見送る",
   "error": "コーデ提案の生成に失敗しました。もう一度お試しください。",
+  "detectedStyles": {
+    "description": "使用中のワードローブから検出されたスタイルを選んでください。",
+    "empty": "スタイルはまだ検出されていません。まず数点のAI分析を完了してください。",
+    "error": "検出されたスタイルを読み込めませんでした。",
+    "itemCount": "{count}点",
+    "loading": "検出されたスタイルを読み込み中",
+    "title": "ワードローブのスタイル"
+  },
   "feedback": {
     "commentsOptional": "コメント（任意）",
     "commentsPlaceholder": "このコーデについてどう思いますか？",

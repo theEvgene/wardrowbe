@@ -1,6 +1,14 @@
 {
   "dismissOutfit": "Outfit verwerfen",
   "error": "Outfit-Vorschlag konnte nicht generiert werden. Bitte versuche es erneut.",
+  "detectedStyles": {
+    "description": "Wähle einen Stil aus deinem aktiven Kleiderschrank.",
+    "empty": "Es wurden noch keine Stile erkannt. Analysiere zuerst einige Kleidungsstücke.",
+    "error": "Die erkannten Stile konnten nicht geladen werden.",
+    "itemCount": "{count, plural, one {# Teil} other {# Teile}}",
+    "loading": "Erkannte Stile werden geladen",
+    "title": "Stile in deinem Kleiderschrank"
+  },
   "feedback": {
     "commentsOptional": "Kommentare (optional)",
     "commentsPlaceholder": "Gedanken zu diesem Outfit?",

@@ -1,6 +1,14 @@
 {
   "dismissOutfit": "Ignora outfit",
   "error": "Generazione suggerimento outfit fallita. Riprova.",
+  "detectedStyles": {
+    "description": "Scegli uno stile rilevato nel tuo guardaroba attivo.",
+    "empty": "Nessuno stile rilevato. Completa prima l’analisi di alcuni capi.",
+    "error": "Impossibile caricare gli stili rilevati.",
+    "itemCount": "{count, plural, one {# capo} other {# capi}}",
+    "loading": "Caricamento degli stili rilevati",
+    "title": "Stili nel tuo guardaroba"
+  },
   "feedback": {
     "commentsOptional": "Commenti (opzionale)",
     "commentsPlaceholder": "Qualche pensiero su questo outfit?",
