@@ -27,6 +27,10 @@ from app.services.ai_service import AIDisabledError
 from app.services.external_outfit_service import ExternalOutfitService
 from app.services.item_service import ItemService
 from app.services.learning_service import LearningService
+from app.services.outfit_refinement_service import (
+    OutfitRefinementError,
+    OutfitRefinementService,
+)
 from app.services.outfit_service import OutfitListFilters, OutfitService
 from app.services.recommendation_service import (
     AIRecommendationError,
@@ -343,6 +347,24 @@ class OutfitListResponse(BaseModel):
 class StyleBatchResponse(BaseModel):
     outfits: list[OutfitResponse]
     model: str | None = None
+
+
+class OutfitRefinementRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    instruction: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("instruction")
+    @classmethod
+    def normalize_instruction(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("instruction must not be blank")
+        return normalized
+
+
+class OutfitRefinementHistoryResponse(BaseModel):
+    outfits: list[OutfitResponse]
 
 
 class BulkOutfitFilters(BaseModel):
@@ -895,6 +917,78 @@ async def bulk_delete_outfits(
     await db.commit()
 
     return BulkDeleteOutfitsResponse(deleted=deleted, failed=failed, errors=errors)
+
+
+@router.post(
+    "/{outfit_id}/refine",
+    response_model=OutfitResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def refine_outfit(
+    outfit_id: UUID,
+    request: OutfitRefinementRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> OutfitResponse:
+    await rate_limit_by_user(
+        str(current_user.id), "outfit-refine", max_requests=10, window_seconds=60
+    )
+    try:
+        outfit = await OutfitRefinementService(db).refine(
+            user=current_user,
+            outfit_id=outfit_id,
+            instruction=request.instruction,
+        )
+    except OutfitRefinementError as exc:
+        status_code = {
+            "outfit_not_found": status.HTTP_404_NOT_FOUND,
+            "insufficient_wardrobe": status.HTTP_400_BAD_REQUEST,
+            "refinement_failed": status.HTTP_503_SERVICE_UNAVAILABLE,
+        }.get(exc.code, status.HTTP_409_CONFLICT)
+        raise HTTPException(
+            status_code=status_code,
+            detail={"code": exc.code, "message": exc.message},
+        ) from None
+    except AIDisabledError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "refinement_unavailable",
+                "message": "Internal AI is disabled; outfit refinement is unavailable.",
+            },
+        ) from None
+
+    wore_instead_map = await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
+    return outfit_to_response(outfit, wore_instead_map)
+
+
+@router.get(
+    "/{outfit_id}/refinement-history",
+    response_model=OutfitRefinementHistoryResponse,
+)
+async def get_outfit_refinement_history(
+    outfit_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> OutfitRefinementHistoryResponse:
+    try:
+        outfits = await OutfitRefinementService(db).history(
+            user_id=current_user.id,
+            outfit_id=outfit_id,
+        )
+    except OutfitRefinementError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+                if exc.code == "outfit_not_found"
+                else status.HTTP_409_CONFLICT
+            ),
+            detail={"code": exc.code, "message": exc.message},
+        ) from None
+    wore_instead_map = await fetch_wore_instead_items_map(db, outfits, user_id=current_user.id)
+    return OutfitRefinementHistoryResponse(
+        outfits=[outfit_to_response(outfit, wore_instead_map) for outfit in outfits]
+    )
 
 
 @router.get("/{outfit_id}", response_model=OutfitResponse)
