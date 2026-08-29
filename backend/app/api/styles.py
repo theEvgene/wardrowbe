@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models.item import ClothingItem, ItemStatus
 from app.models.user import User
 from app.utils.auth import get_current_user
+from app.utils.clothing import normalize_style_labels
 
 router = APIRouter(prefix="/styles", tags=["Styles"])
 
@@ -44,12 +45,7 @@ async def list_detected_styles(
 
     counts: Counter[str] = Counter()
     for raw_styles in result.scalars().all():
-        normalized = {
-            style.strip().lower()
-            for style in (raw_styles or [])
-            if isinstance(style, str) and style.strip()
-        }
-        counts.update(normalized)
+        counts.update(normalize_style_labels(raw_styles))
 
     return DetectedStylesResponse(
         styles=[DetectedStyle(style=style, item_count=counts[style]) for style in sorted(counts)]

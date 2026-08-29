@@ -19,7 +19,7 @@ from app.models.preference import UserPreference
 from app.models.user import User
 from app.services.ai_service import AIService, require_internal_ai
 from app.services.recommendation_service import AIRecommendationError, InsufficientWardrobeError
-from app.utils.clothing import ITEM_ROLE, canonical_item_order
+from app.utils.clothing import ITEM_ROLE, canonical_item_order, normalize_style_labels
 from app.utils.timezone import get_user_today
 
 MAX_GENERATION_ATTEMPTS = 3
@@ -209,10 +209,7 @@ class StyleOutfitService:
         target_style = target_style.strip().lower()
         candidates = await self._candidates(user.id)
         detected_styles = {
-            normalized
-            for item in candidates
-            for style in (item.style or [])
-            if (normalized := style.strip().lower())
+            normalized for item in candidates for normalized in normalize_style_labels(item.style)
         }
         if target_style not in detected_styles:
             raise ValueError(f"Style '{target_style}' was not detected in the current wardrobe")

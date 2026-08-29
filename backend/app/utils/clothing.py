@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Iterable
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,16 @@ ITEM_ROLE: dict[str, str] = {
     "bag": "accessory",
     "accessories": "accessory",
 }
+
+
+def normalize_style_labels(styles: Iterable[object] | None) -> set[str]:
+    """Return non-empty wardrobe style labels in their canonical comparison form."""
+
+    return {
+        style.strip().lower()
+        for style in (styles or [])
+        if isinstance(style, str) and style.strip()
+    }
 
 
 def deduplicate_by_body_slot(item_ids: list[UUID], item_type_map: dict[UUID, str]) -> list[UUID]:

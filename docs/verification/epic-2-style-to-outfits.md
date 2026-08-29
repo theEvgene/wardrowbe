@@ -4,7 +4,7 @@
 
 The current `main` implementation was deployed over the existing local PostgreSQL, Redis, and wardrobe volumes. No persistent volume was deleted or recreated.
 
-The browser-driven full-stack smoke passed through public interfaces:
+The real-model full-stack smoke passed through public HTTP interfaces:
 
 `upload → gemma3:4b metadata → automatic u2net_cloth_seg extraction → metadata review → detected styles → style selection → N=2 → persisted outfits → composite previews`
 
@@ -41,7 +41,7 @@ The Docker image caches both `u2net` and `u2net_cloth_seg` under `/opt/rembg` be
 - i18n key, locale parity, and untranslated-string scans: passed.
 - Ruff lint: passed; changed Python files pass Ruff formatting.
 - Production Next.js build: passed.
-- Production Playwright browser happy path: **1 passed**, 0 failures. The scenario covers onboarding, upload with automatic safe extraction enabled, detected-style selection, exact-N generation, persistence, and composite previews.
+- Production Playwright browser contract: **1 passed**, 0 failures. The deterministic scenario covers onboarding, upload with automatic safe extraction enabled, detected-style selection, exact-N generation, persistence responses, and composite previews; the separate real-model smoke above verifies the service lifecycle and database persistence without API mocks.
 - Real local full-stack smoke with `gemma3:4b`: passed.
 
 The final GitHub Actions evidence and immutable run URL are recorded in the closure comment on issue #23 so this document does not require a follow-up commit after each CI run.
