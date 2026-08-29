@@ -61,6 +61,48 @@ class PromptAwareAI:
 
 
 class TestStyleOutfitService:
+    def test_accepts_a_top_level_json_array_from_local_models(self) -> None:
+        proposals = StyleOutfitService._parse('[{"items":[1,2,3]}]')
+
+        assert proposals == [{"items": [1, 2, 3]}]
+
+    def test_flattens_local_model_array_of_outfit_wrappers(self) -> None:
+        proposals = StyleOutfitService._parse(
+            '[{"outfits":[{"items":[2,1,4]}]},{"outfits":[{"items":[3,1,4]}]}]'
+        )
+
+        assert proposals == [{"items": [2, 1, 4]}, {"items": [3, 1, 4]}]
+
+    def test_prompt_marks_body_slots_and_forbids_slot_conflicts(self) -> None:
+        candidates = [
+            SimpleNamespace(type="pants", primary_color="black", style=["casual"], formality=None),
+            SimpleNamespace(type="shirt", primary_color="blue", style=["casual"], formality=None),
+            SimpleNamespace(type="shirt", primary_color="navy", style=["casual"], formality=None),
+            SimpleNamespace(type="shoes", primary_color="white", style=["casual"], formality=None),
+        ]
+
+        prompt = StyleOutfitService._prompt(candidates, "casual", 2, "casual")
+
+        assert "type=shirt | role=base_top" in prompt
+        assert "Never include two items with the same role" in prompt
+        assert "exactly one base_top, exactly one bottom, and exactly one footwear" in prompt
+        assert "VALID CORE ITEM SETS: [[2, 1, 4], [3, 1, 4]]" in prompt
+        assert '"items":[2,1,4]' in prompt
+
+    def test_enumerates_only_complete_core_item_sets(self) -> None:
+        candidates = [
+            SimpleNamespace(type="dress"),
+            SimpleNamespace(type="shirt"),
+            SimpleNamespace(type="pants"),
+            SimpleNamespace(type="shoes"),
+            SimpleNamespace(type="hat"),
+        ]
+
+        assert StyleOutfitService._valid_core_number_sets(candidates) == [
+            [1, 4],
+            [2, 3, 4],
+        ]
+
     @pytest.mark.asyncio
     async def test_public_endpoint_returns_requested_batch(
         self, client, auth_headers, db_session: AsyncSession, test_user, monkeypatch

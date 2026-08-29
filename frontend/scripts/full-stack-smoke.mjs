@@ -76,7 +76,7 @@ async function confirmMetadata(item, { type, primaryColor, style = 'casual' }) {
       type,
       primary_color: primaryColor,
       colors: [primaryColor],
-      style: [style],
+      tags: { style: [style] },
       confirm_fields: ['type', 'primary_color', 'colors', 'style'],
     },
   });
@@ -317,7 +317,10 @@ try {
   assert.equal(detectedStyles.ok, true, `Detected styles failed: ${detectedStyles.status}`);
   const casualStyle = detectedStyles.body.styles.find((entry) => entry.style === 'casual');
   assert.ok(casualStyle, `Casual style was not detected: ${JSON.stringify(detectedStyles.body)}`);
-  assert.ok(casualStyle.item_count >= 4, 'Detected casual style count did not match smoke wardrobe');
+  assert.ok(
+    casualStyle.item_count >= 4,
+    `Detected casual style count did not match smoke wardrobe: ${JSON.stringify(detectedStyles.body)}`,
+  );
 
   await page.goto(`${baseUrl}/dashboard/suggest`, { waitUntil: 'networkidle' });
   await page.locator('button[aria-pressed]').filter({ hasText: 'casual' }).click();
@@ -334,8 +337,12 @@ try {
     page.getByRole('button', { name: 'Get Suggestion' }).click(),
   ]);
   const generationLatencyMs = Date.now() - generationStartedAt;
-  assert.equal(generationResponse.ok(), true, `Style generation failed: ${generationResponse.status()}`);
   const generatedBatch = await generationResponse.json();
+  assert.equal(
+    generationResponse.ok(),
+    true,
+    `Style generation failed: ${generationResponse.status()} ${JSON.stringify(generatedBatch)}`,
+  );
   assert.equal(generatedBatch.outfits.length, 2, 'Real model did not return exactly two outfits');
   assert.match(generatedBatch.model || '', /gemma3:4b/i, 'Unexpected local text model');
   const activeItemIds = new Set(itemIds);

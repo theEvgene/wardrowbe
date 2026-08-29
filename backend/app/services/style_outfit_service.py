@@ -45,10 +45,37 @@ class StyleOutfitService:
         return sorted(result.scalars().all(), key=lambda item: (item.type or "", str(item.id)))
 
     @staticmethod
-    def _prompt(items: list[ClothingItem], target_style: str, count: int, occasion: str) -> str:
+    def _valid_core_number_sets(items: list[ClothingItem], limit: int = 200) -> list[list[int]]:
+        by_role: dict[str, list[int]] = {}
+        for number, item in enumerate(items, 1):
+            role = ITEM_ROLE.get((item.type or "").lower())
+            if role:
+                by_role.setdefault(role, []).append(number)
+
+        valid: list[list[int]] = []
+        for full_body in by_role.get("full_body", []):
+            for footwear in by_role.get("footwear", []):
+                valid.append([full_body, footwear])
+                if len(valid) == limit:
+                    return valid
+        for base_top in by_role.get("base_top", []):
+            for bottom in by_role.get("bottom", []):
+                for footwear in by_role.get("footwear", []):
+                    valid.append([base_top, bottom, footwear])
+                    if len(valid) == limit:
+                        return valid
+        return valid
+
+    @classmethod
+    def _prompt(
+        cls, items: list[ClothingItem], target_style: str, count: int, occasion: str
+    ) -> str:
         lines = []
         for number, item in enumerate(items, 1):
             details = [f"[{number}] type={item.type}"]
+            role = ITEM_ROLE.get((item.type or "").lower())
+            if role:
+                details.append(f"role={role}")
             if item.primary_color:
                 details.append(f"color={item.primary_color}")
             if item.style:
@@ -56,14 +83,20 @@ class StyleOutfitService:
             if item.formality:
                 details.append(f"formality={item.formality}")
             lines.append(" | ".join(details))
+        valid_core_sets = cls._valid_core_number_sets(items)
+        example = json.dumps(valid_core_sets[0], separators=(",", ":"))
         return (
             "You are a wardrobe stylist. Use only the numbered items below.\n"
             f"Create exactly {count} complete, distinct outfits in the '{target_style}' style "
             f"for the '{occasion}' occasion.\n"
-            "Each outfit must contain either one full-body item and footwear, or one top, "
-            "one bottom, and footwear. Optional outerwear and accessories are allowed.\n"
+            "Each outfit must contain either exactly one full_body and exactly one footwear, "
+            "or exactly one base_top, exactly one bottom, and exactly one footwear. "
+            "Never include two items with the same role. Optional outer_layer, mid_layer, "
+            "socks, neckwear, and accessories are allowed.\n"
             "Outfits must differ in at least one non-accessory item. Never invent item numbers.\n"
-            'Return JSON only: {"outfits":[{"items":[1,2,3],"headline":"...",'
+            f"VALID CORE ITEM SETS: {json.dumps(valid_core_sets)}\n"
+            f"For every outfit, copy one distinct VALID CORE ITEM SET unchanged into items. "
+            f'Return JSON only: {{"outfits":[{{"items":{example},"headline":"...",'
             '"styling_tip":"..."}]}\n\n'
             "AVAILABLE ITEMS:\n" + "\n".join(lines)
         )
@@ -75,7 +108,16 @@ class StyleOutfitService:
             parsed = json.loads(cleaned)
         except json.JSONDecodeError as exc:
             raise AIRecommendationError("AI returned invalid JSON") from exc
-        outfits = parsed.get("outfits") if isinstance(parsed, dict) else None
+        if isinstance(parsed, list):
+            if parsed and all(
+                isinstance(wrapper, dict) and isinstance(wrapper.get("outfits"), list)
+                for wrapper in parsed
+            ):
+                outfits = [proposal for wrapper in parsed for proposal in wrapper["outfits"]]
+            else:
+                outfits = parsed
+        else:
+            outfits = parsed.get("outfits") if isinstance(parsed, dict) else None
         if not isinstance(outfits, list):
             raise AIRecommendationError("AI response must contain an outfits array")
         return outfits
@@ -158,6 +200,12 @@ class StyleOutfitService:
         if len(candidates) < 3:
             raise InsufficientWardrobeError(
                 "Not enough active wardrobe items for a complete outfit"
+            )
+        valid_core_sets = self._valid_core_number_sets(candidates)
+        if len(valid_core_sets) < count:
+            raise InsufficientWardrobeError(
+                f"Only {len(valid_core_sets)} distinct complete outfits can be built from the "
+                f"current wardrobe; {count} requested"
             )
 
         preference_result = await self.db.execute(

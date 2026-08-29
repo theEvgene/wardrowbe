@@ -17,8 +17,17 @@ RUN pip install --no-cache-dir \
     -r requirements-extras.txt \
     -r requirements-embeddings.txt
 
-# Pre-download both scene and garment models so removal works without runtime downloads
-RUN python -c "from rembg import new_session; new_session('u2net'); new_session('u2net_cloth_seg')"
+# Pre-download both scene and garment models into a location shared by the
+# root build step and the non-root runtime worker. rembg otherwise defaults
+# to a user-home cache and appuser downloads the same weights again.
+ENV U2NET_HOME=/opt/rembg
+RUN mkdir -p "$U2NET_HOME"
+RUN for attempt in 1 2 3 4 5; do \
+        python -c "from rembg import new_session; new_session('u2net'); new_session('u2net_cloth_seg')" && break; \
+        test "$attempt" -eq 5 && exit 1; \
+        sleep 5; \
+    done
+RUN chmod -R a+rX "$U2NET_HOME"
 
 # Pin and cache the review-only garment embedding model so self-hosted matching
 # does not require outbound network access after the image has been built.
