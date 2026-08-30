@@ -49,7 +49,5 @@ def downgrade() -> None:
           AND replaces_outfit_id IS NULL
         """
     )
-    op.drop_constraint(
-        "fk_outfits_refined_from_outfit_id", "outfits", type_="foreignkey"
-    )
+    op.drop_constraint("fk_outfits_refined_from_outfit_id", "outfits", type_="foreignkey")
     op.drop_column("outfits", "refined_from_outfit_id")

@@ -160,11 +160,7 @@ class OutfitRefinementService:
         novel_numbers = raw_set - current_numbers
         if not novel_numbers:
             return None
-        eligible = [
-            valid_set
-            for valid_set in valid_number_sets
-            if novel_numbers <= set(valid_set)
-        ]
+        eligible = [valid_set for valid_set in valid_number_sets if novel_numbers <= set(valid_set)]
         if not eligible:
             return None
         scored = [

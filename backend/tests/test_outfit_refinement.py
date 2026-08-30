@@ -94,7 +94,11 @@ class ConflictingSupersetAI(ValidRefinementAI):
     async def generate_text(self, prompt: str, return_metadata: bool = False):
         matches = re.findall(r"\[(\d+)\] id=[^ ]+ type=([^ ]+) current=(true|false)", prompt)
         by_type = {
-            item_type: [int(number) for number, candidate_type, _current in matches if candidate_type == item_type]
+            item_type: [
+                int(number)
+                for number, candidate_type, _current in matches
+                if candidate_type == item_type
+            ]
             for item_type in {match[1] for match in matches}
         }
         return SimpleNamespace(
@@ -309,9 +313,7 @@ async def test_refinement_repairs_one_unambiguous_conflicting_superset(
     client, auth_headers, db_session: AsyncSession, test_user, monkeypatch
 ) -> None:
     source, items = await create_source_outfit(db_session, test_user)
-    monkeypatch.setattr(
-        "app.services.outfit_refinement_service.AIService", ConflictingSupersetAI
-    )
+    monkeypatch.setattr("app.services.outfit_refinement_service.AIService", ConflictingSupersetAI)
 
     response = await client.post(
         f"/api/v1/outfits/{source.id}/refine",
@@ -464,9 +466,7 @@ async def test_family_list_redacts_private_generation_context(
     await db_session.commit()
     headers = {"Authorization": f"Bearer {create_access_token(viewer.external_id)}"}
 
-    response = await client.get(
-        f"/api/v1/outfits?family_member_id={test_user.id}", headers=headers
-    )
+    response = await client.get(f"/api/v1/outfits?family_member_id={test_user.id}", headers=headers)
 
     assert response.status_code == 200, response.json()
     listed = next(entry for entry in response.json()["outfits"] if entry["id"] == str(source.id))
