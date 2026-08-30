@@ -53,6 +53,7 @@ export interface Outfit {
   source: OutfitSource;
   name: string | null;
   replaces_outfit_id: string | null;
+  refined_from_outfit_id?: string | null;
   cloned_from_outfit_id: string | null;
   reasoning: string | null;
   style_notes: string | null;

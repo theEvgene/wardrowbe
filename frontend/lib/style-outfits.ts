@@ -10,17 +10,42 @@ export interface StyleBatchContextInput {
   note?: string | null;
 }
 
-function formatLocalDate(value: Date): string {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const day = String(value.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+const TIME_OF_DAY_MESSAGE_KEYS: Record<string, string> = {
+  morning: 'context.times.morning',
+  afternoon: 'context.times.afternoon',
+  evening: 'context.times.evening',
+  night: 'context.times.night',
+  'full day': 'context.times.fullDay',
+};
+
+export function getTimeOfDayMessageKey(value: string): string | null {
+  return TIME_OF_DAY_MESSAGE_KEYS[value] ?? null;
 }
 
-export function getStyleDateBounds(now = new Date()): { min: string; max: string } {
-  const max = new Date(now);
-  max.setDate(max.getDate() + 15);
-  return { min: formatLocalDate(now), max: formatLocalDate(max) };
+function formatDateInTimezone(value: Date, timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((candidate) => candidate.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function addCalendarDays(date: string, days: number): string {
+  const [year, month, day] = date.split('-').map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1, day + days));
+  return shifted.toISOString().slice(0, 10);
+}
+
+export function getStyleDateBounds(
+  now = new Date(),
+  timezone = 'UTC',
+): { min: string; max: string } {
+  const min = formatDateInTimezone(now, timezone);
+  return { min, max: addCalendarDays(min, 15) };
 }
 
 export function buildStyleBatchRequest(

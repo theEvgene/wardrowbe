@@ -93,6 +93,12 @@ class Outfit(Base):
         nullable=True,
     )
 
+    refined_from_outfit_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("outfits.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     cloned_from_outfit_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("outfits.id", ondelete="SET NULL"),
@@ -126,6 +132,12 @@ class Outfit(Base):
     replaces: Mapped[Optional["Outfit"]] = relationship(
         "Outfit",
         foreign_keys=[replaces_outfit_id],
+        remote_side="Outfit.id",
+        post_update=True,
+    )
+    refined_from: Mapped[Optional["Outfit"]] = relationship(
+        "Outfit",
+        foreign_keys=[refined_from_outfit_id],
         remote_side="Outfit.id",
         post_update=True,
     )

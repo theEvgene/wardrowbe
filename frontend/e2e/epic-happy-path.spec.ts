@@ -323,26 +323,54 @@ async function installApiContract(page: Page) {
     if (historyMatch && method === 'GET') {
       return route.fulfill({ json: { outfits: refinementHistory.get(historyMatch[1]) ?? [] } });
     }
-    if (path === `/outfits/${firstStyleOutfit.id}/refine` && method === 'POST') {
-      expect(request.postDataJSON()).toEqual({ instruction: 'Make it more relaxed' });
-      const original = generatedOutfits.find((outfit) => outfit.id === firstStyleOutfit.id)!;
+    const refineMatch = path.match(/^\/outfits\/([^/]+)\/refine$/);
+    if (refineMatch && method === 'POST') {
+      const parentId = refineMatch[1];
+      const lineage = refinementHistory.get(parentId);
+      expect(lineage, `missing lineage for ${parentId}`).toBeDefined();
+      const parent = lineage![lineage!.length - 1];
+      const turn = (parent.generation_context?.refinement?.turn ?? 0) + 1;
+      const instruction = turn === 1 ? 'Make it more relaxed' : 'Make it weatherproof';
+      expect(request.postDataJSON()).toEqual({ instruction });
+      const rootId = parent.generation_context?.refinement?.root_outfit_id ?? parent.id;
       const refined = {
-        ...original,
-        id: 'style-outfit-1-refined',
-        replaces_outfit_id: original.id,
-        reasoning: 'Swapped the shirt for a more relaxed version.',
-        items: secondStyleOutfit.items,
+        ...parent,
+        id: `${rootId}-refined-${turn}`,
+        replaces_outfit_id: null,
+        refined_from_outfit_id: parent.id,
+        reasoning: turn === 1
+          ? 'Swapped the shirt for a more relaxed version.'
+          : 'Made the outfit more weatherproof.',
+        items: turn === 1
+          ? secondStyleOutfit.items
+          : [
+              {
+                ...secondStyleOutfit.items[0],
+                id: uploaded.id,
+                name: uploaded.name,
+                image_path: uploaded.image_path,
+                image_url: uploaded.image_url,
+                thumbnail_url: uploaded.thumbnail_url,
+                transparent_url: image('uploaded-cutout'),
+              },
+              ...secondStyleOutfit.items.slice(1),
+            ],
         generation_context: {
-          ...original.generation_context,
+          ...parent.generation_context,
           refinement: {
-            instruction: 'Make it more relaxed',
-            turn: 1,
-            root_outfit_id: original.id,
-            parent_outfit_id: original.id,
+            instruction,
+            turn,
+            root_outfit_id: rootId,
+            parent_outfit_id: parent.id,
           },
         },
       };
-      refinementHistory.set(refined.id, [original, refined]);
+      const nextLineage = [...lineage!, refined];
+      refinementHistory.set(refined.id, nextLineage);
+      generatedOutfits = generatedOutfits.map((outfit) => {
+        const outfitRoot = outfit.generation_context?.refinement?.root_outfit_id ?? outfit.id;
+        return outfitRoot === rootId ? refined : outfit;
+      });
       return route.fulfill({ status: 201, json: refined });
     }
     if (path === `/items/${source.id}/remove-background` && method === 'POST') {
@@ -359,7 +387,8 @@ async function installApiContract(page: Page) {
       return route.fulfill({ json: { generated: 1, pairings: [pairing] } });
     }
     if (path === '/pairings' && method === 'GET') {
-      return route.fulfill({ json: { pairings: [pairing], total: 1, page: 1, page_size: 20, has_more: false } });
+      const pairings = generatedOutfits.length > 0 ? [generatedOutfits[0]] : [pairing];
+      return route.fulfill({ json: { pairings, total: pairings.length, page: 1, page_size: 20, has_more: false } });
     }
     if (path === '/families/me' && method === 'GET') {
       return route.fulfill({ status: 404, json: { detail: 'Not in a family' } });
@@ -463,5 +492,27 @@ test('user reaches a cutout-based composite outfit through the browser happy pat
     'Swapped the shirt for a more relaxed version.',
   );
   await expect(page.getByTestId(`outfit-item-${secondShirt.id}`).first()).toBeVisible();
+
+  await stylist.getByLabel('Tell the stylist what to change').fill('Make it weatherproof');
+  await stylist.getByRole('button', { name: 'Refine outfit' }).click();
+  await expect(stylist).toContainText('Make it weatherproof');
+  await expect(stylist.getByRole('button', { name: 'Open version 2' })).toHaveAttribute(
+    'aria-current',
+    'true',
+  );
+  await expect(page.getByTestId(`outfit-item-${uploaded.id}`).first()).toBeVisible();
+
+  await page.goto('/dashboard/pairings');
+  await page.reload();
+  await expect(page.getByText('Made the outfit more weatherproof.')).toBeVisible();
+  await page.getByRole('button').filter({ has: page.getByRole('img', { name: uploaded.name }) }).click();
+  const reopenedStylist = page.getByTestId('outfit-refinement-panel');
+  await expect(reopenedStylist).toContainText('Make it more relaxed');
+  await expect(reopenedStylist).toContainText('Make it weatherproof');
+  await expect(reopenedStylist.getByRole('button', { name: 'Open version 2' })).toHaveAttribute(
+    'aria-current',
+    'true',
+  );
+  await expect(page.getByTestId(`outfit-item-${uploaded.id}`)).toBeVisible();
   assertCleanBrowserContract();
 });

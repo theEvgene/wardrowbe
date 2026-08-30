@@ -22,6 +22,8 @@ vi.mock('next-intl', () => ({
       submit: 'Refine outfit',
       submitting: 'Refining…',
       error: 'Could not refine this outfit. Please try again.',
+      activeVersion: 'Active version',
+      selectVersion: `Open version ${values?.number}`,
     };
     return messages[key] || key;
   },
@@ -35,6 +37,7 @@ vi.mock('@/lib/api', () => ({
 interface TestOutfit {
   id: string;
   replaces_outfit_id: string | null;
+  refined_from_outfit_id: string | null;
   reasoning: string | null;
   generation_context: {
     refinement?: {
@@ -49,13 +52,15 @@ interface TestOutfit {
 const root: TestOutfit = {
   id: 'root',
   replaces_outfit_id: null,
+  refined_from_outfit_id: null,
   reasoning: 'Original reasoning',
   generation_context: null,
 };
 
 const first: TestOutfit = {
   id: 'first',
-  replaces_outfit_id: 'root',
+  replaces_outfit_id: null,
+  refined_from_outfit_id: 'root',
   reasoning: 'Changed the shirt.',
   generation_context: {
     refinement: {
@@ -77,7 +82,8 @@ describe('OutfitRefinementPanel', () => {
     const second: TestOutfit = {
       ...first,
       id: 'second',
-      replaces_outfit_id: 'first',
+      replaces_outfit_id: null,
+      refined_from_outfit_id: 'first',
       reasoning: 'Made the styling more relaxed.',
       generation_context: {
         refinement: {
@@ -129,5 +135,35 @@ describe('OutfitRefinementPanel', () => {
     expect(
       await screen.findByText('Could not refine this outfit. Please try again.'),
     ).toBeInTheDocument();
+  });
+
+  it('lets the user select an earlier version and continues refinement from it', async () => {
+    const onVersionChange = vi.fn();
+    vi.mocked(api.post).mockResolvedValue({ ...first, id: 'branched-version' });
+
+    render(<OutfitRefinementPanel outfit={first} onVersionChange={onVersionChange} />);
+
+    const originalVersion = await screen.findByRole('button', { name: 'Open version 0' });
+    expect(screen.getByRole('button', { name: 'Open version 1' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+
+    fireEvent.click(originalVersion);
+
+    expect(onVersionChange).toHaveBeenCalledWith(root);
+    expect(originalVersion).toHaveAttribute('aria-current', 'true');
+
+    fireEvent.change(screen.getByLabelText('Tell the stylist what to change'), {
+      target: { value: 'Try another direction' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Refine outfit' }));
+
+    await waitFor(() => {
+      expect(api.post).toHaveBeenCalledWith('/outfits/root/refine', {
+        instruction: 'Try another direction',
+      });
+    });
+    expect(screen.getAllByRole('button', { name: 'Open version 1' })).toHaveLength(1);
   });
 });

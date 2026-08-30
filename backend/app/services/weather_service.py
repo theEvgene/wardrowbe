@@ -16,15 +16,15 @@ settings = get_settings()
 @dataclass
 class WeatherData:
     temperature: float  # Celsius
-    feels_like: float  # Apparent temperature
-    humidity: int  # Percentage
+    feels_like: float | None  # Apparent temperature
+    humidity: int | None  # Percentage
     precipitation_chance: int  # Percentage
-    precipitation_mm: float  # mm in next hour
-    wind_speed: float  # km/h
+    precipitation_mm: float | None  # mm in next hour / forecast day
+    wind_speed: float | None  # km/h
     condition: str  # sunny, cloudy, rainy, snowy, etc.
     condition_code: int  # WMO weather code
     is_day: bool
-    uv_index: float
+    uv_index: float | None
     timestamp: datetime
 
     def to_dict(self) -> dict:
@@ -54,6 +54,11 @@ class DailyForecast:
     precipitation_chance: int
     condition: str
     condition_code: int
+    feels_like: float | None = None
+    humidity: int | None = None
+    precipitation_mm: float | None = None
+    wind_speed: float | None = None
+    uv_index: float | None = None
 
 
 # WMO Weather interpretation codes
@@ -358,6 +363,11 @@ class WeatherService:
                 "temperature_2m_max",
                 "temperature_2m_min",
                 "precipitation_probability_max",
+                "apparent_temperature_max",
+                "apparent_temperature_min",
+                "precipitation_sum",
+                "wind_speed_10m_max",
+                "uv_index_max",
                 "weather_code",
             ],
             "forecast_days": min(days, 16),
@@ -379,6 +389,11 @@ class WeatherService:
         temp_mins = daily.get("temperature_2m_min", [])
         precip_probs = daily.get("precipitation_probability_max", [])
         weather_codes = daily.get("weather_code", [])
+        apparent_maxs = daily.get("apparent_temperature_max", [])
+        apparent_mins = daily.get("apparent_temperature_min", [])
+        precipitation_sums = daily.get("precipitation_sum", [])
+        wind_maxs = daily.get("wind_speed_10m_max", [])
+        uv_maxs = daily.get("uv_index_max", [])
 
         forecasts = []
         for i, date in enumerate(dates):
@@ -391,6 +406,20 @@ class WeatherService:
                     precipitation_chance=precip_probs[i] if i < len(precip_probs) else 0,
                     condition=self._interpret_weather_code(code),
                     condition_code=code,
+                    feels_like=(
+                        round((apparent_mins[i] + apparent_maxs[i]) / 2, 1)
+                        if i < len(apparent_mins)
+                        and i < len(apparent_maxs)
+                        and apparent_mins[i] is not None
+                        and apparent_maxs[i] is not None
+                        else None
+                    ),
+                    humidity=None,
+                    precipitation_mm=(
+                        precipitation_sums[i] if i < len(precipitation_sums) else None
+                    ),
+                    wind_speed=wind_maxs[i] if i < len(wind_maxs) else None,
+                    uv_index=uv_maxs[i] if i < len(uv_maxs) else None,
                 )
             )
 
@@ -421,20 +450,17 @@ class WeatherService:
 
         # Use average of min/max for the representative temperature
         avg_temp = (tomorrow.temp_min + tomorrow.temp_max) / 2
-        # Use the max temp for feels_like (daytime outfit)
-        feels_like = tomorrow.temp_max
-
         return WeatherData(
             temperature=round(avg_temp, 1),
-            feels_like=round(feels_like, 1),
-            humidity=50,  # Not available in daily forecast, use typical value
+            feels_like=tomorrow.feels_like,
+            humidity=tomorrow.humidity,
             precipitation_chance=tomorrow.precipitation_chance,
-            precipitation_mm=0,  # Not available for forecast
-            wind_speed=0,  # Not available in daily forecast
+            precipitation_mm=tomorrow.precipitation_mm,
+            wind_speed=tomorrow.wind_speed,
             condition=tomorrow.condition,
             condition_code=tomorrow.condition_code,
             is_day=True,  # Assume daytime for outfit recommendations
-            uv_index=0,  # Not available in daily forecast
+            uv_index=tomorrow.uv_index,
             timestamp=datetime.utcnow(),
         )
 

@@ -45,6 +45,11 @@ SAMPLE_FORECAST_RESPONSE = {
         "temperature_2m_max": [18.0, 22.0],
         "temperature_2m_min": [8.0, 12.0],
         "precipitation_probability_max": [10, 40],
+        "apparent_temperature_max": [17.0, 20.0],
+        "apparent_temperature_min": [7.0, 10.0],
+        "precipitation_sum": [0.0, 3.4],
+        "wind_speed_10m_max": [8.0, 21.0],
+        "uv_index_max": [2.0, 1.0],
         "weather_code": [0, 61],
     },
 }
@@ -292,6 +297,11 @@ class TestGetDailyForecast:
         assert result[0].temp_max == 18.0
         assert result[0].condition == "sunny"
         assert result[1].condition == "light rain"
+        assert result[1].feels_like == 15.0
+        assert result[1].precipitation_mm == 3.4
+        assert result[1].wind_speed == 21.0
+        assert result[1].uv_index == 1.0
+        assert result[1].humidity is None
 
     @pytest.mark.asyncio
     async def test_caps_days_at_16(self, weather_service, mock_redis):
@@ -320,9 +330,13 @@ class TestGetTomorrowWeather:
             result = await weather_service.get_tomorrow_weather(40.71, -74.01)
 
         assert result.temperature == 17.0  # avg of 12.0 and 22.0
-        assert result.feels_like == 22.0  # max temp
+        assert result.feels_like == 15.0
         assert result.condition == "light rain"
         assert result.precipitation_chance == 40
+        assert result.humidity is None
+        assert result.precipitation_mm == 3.4
+        assert result.wind_speed == 21.0
+        assert result.uv_index == 1.0
         assert result.is_day is True
 
     @pytest.mark.asyncio

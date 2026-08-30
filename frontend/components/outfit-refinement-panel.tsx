@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
 import { Loader2, MessageCircle, Send } from 'lucide-react';
@@ -21,6 +21,7 @@ interface RefinementMetadata {
 export interface RefinableOutfit {
   id: string;
   replaces_outfit_id?: string | null;
+  refined_from_outfit_id?: string | null;
   reasoning?: string | null;
   style_notes?: string | null;
   generation_context?: {
@@ -42,18 +43,27 @@ export function OutfitRefinementPanel<T extends RefinableOutfit>({
   const t = useTranslations('suggest.refinement');
   const { data: session } = useSession();
   const [history, setHistory] = useState<T[]>([outfit]);
+  const historyRef = useRef<T[]>([outfit]);
+  const [selectedVersion, setSelectedVersion] = useState<T>(outfit);
   const [instruction, setInstruction] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
+    setSelectedVersion(outfit);
     if (session?.accessToken) {
       setAccessToken(session.accessToken as string);
     }
+    if (historyRef.current.length > 1 && historyRef.current.some((version) => version.id === outfit.id)) {
+      return () => {
+        active = false;
+      };
+    }
+    historyRef.current = [outfit];
     setHistory([outfit]);
     setError(null);
-    if (!outfit.replaces_outfit_id) {
+    if (!outfit.refined_from_outfit_id) {
       return () => {
         active = false;
       };
@@ -61,10 +71,16 @@ export function OutfitRefinementPanel<T extends RefinableOutfit>({
     api
       .get<{ outfits: T[] }>(`/outfits/${outfit.id}/refinement-history`)
       .then((result) => {
-        if (active) setHistory(result.outfits);
+        if (active) {
+          historyRef.current = result.outfits;
+          setHistory(result.outfits);
+        }
       })
       .catch(() => {
-        if (active) setHistory([outfit]);
+        if (active) {
+          historyRef.current = [outfit];
+          setHistory([outfit]);
+        }
       });
     return () => {
       active = false;
@@ -80,10 +96,19 @@ export function OutfitRefinementPanel<T extends RefinableOutfit>({
     setIsSubmitting(true);
     setError(null);
     try {
-      const refined = await api.post<T>(`/outfits/${outfit.id}/refine`, {
+      const refined = await api.post<T>(`/outfits/${selectedVersion.id}/refine`, {
         instruction: normalized,
       });
-      setHistory((current) => [...current, refined]);
+      const selectedIndex = historyRef.current.findIndex(
+        (version) => version.id === selectedVersion.id,
+      );
+      const lineage = selectedIndex >= 0
+        ? historyRef.current.slice(0, selectedIndex + 1)
+        : [selectedVersion];
+      const nextHistory = [...lineage, refined];
+      historyRef.current = nextHistory;
+      setHistory(nextHistory);
+      setSelectedVersion(refined);
       setInstruction('');
       onVersionChange(refined);
     } catch {
@@ -109,35 +134,49 @@ export function OutfitRefinementPanel<T extends RefinableOutfit>({
         <div className="space-y-3" aria-live="polite">
           {history.map((version, index) => {
             const refinement = version.generation_context?.refinement;
-            if (!refinement) {
-              return (
-                <div key={version.id} className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
-                  <span className="font-medium">{t('original')}</span>
-                </div>
-              );
-            }
+            const versionNumber = refinement?.turn ?? index;
+            const isActive = selectedVersion.id === version.id;
             return (
-              <div key={version.id} className="space-y-2" data-testid="refinement-turn">
-                <p className="text-xs font-medium text-muted-foreground">
-                  {t('version', { number: refinement.turn || index })}
-                </p>
-                <div className="ml-6 rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
-                  <span className="sr-only">{t('you')}: </span>
-                  {refinement.instruction}
+              <button
+                key={version.id}
+                type="button"
+                aria-label={t('selectVersion', { number: versionNumber })}
+                aria-current={isActive ? 'true' : undefined}
+                onClick={() => {
+                  setSelectedVersion(version);
+                  onVersionChange(version);
+                }}
+                className={`w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                  isActive ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'bg-muted/30 hover:bg-muted/60'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">
+                    {refinement ? t('version', { number: versionNumber }) : t('original')}
+                  </span>
+                  {isActive && <span className="text-xs text-primary">{t('activeVersion')}</span>}
                 </div>
-                <div className="mr-6 rounded-lg border bg-background px-3 py-2 text-sm">
-                  <span className="sr-only">{t('stylist')}: </span>
-                  {version.reasoning || version.style_notes || t('updated')}
-                </div>
-              </div>
+                {refinement && (
+                  <div className="mt-2 space-y-2" data-testid="refinement-turn">
+                    <div className="ml-6 rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
+                      <span className="sr-only">{t('you')}: </span>
+                      {refinement.instruction}
+                    </div>
+                    <div className="mr-6 rounded-lg border bg-background px-3 py-2 text-sm">
+                      <span className="sr-only">{t('stylist')}: </span>
+                      {version.reasoning || version.style_notes || t('updated')}
+                    </div>
+                  </div>
+                )}
+              </button>
             );
           })}
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor={`refinement-${outfit.id}`}>{t('instruction')}</Label>
+          <Label htmlFor={`refinement-${selectedVersion.id}`}>{t('instruction')}</Label>
           <Textarea
-            id={`refinement-${outfit.id}`}
+            id={`refinement-${selectedVersion.id}`}
             value={instruction}
             maxLength={1000}
             disabled={disabled || isSubmitting}

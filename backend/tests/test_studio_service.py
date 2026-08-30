@@ -5,7 +5,7 @@ import pytest
 import pytest_asyncio
 
 from app.models.item import ClothingItem, ItemStatus
-from app.models.outfit import OutfitSource, OutfitStatus
+from app.models.outfit import Outfit, OutfitSource, OutfitStatus
 from app.models.user import User
 from app.services.studio_service import (
     ItemOwnershipError,
@@ -460,6 +460,47 @@ async def test_wore_instead_idempotent(db_session, studio_user, wardrobe_items):
     await db_session.commit()
 
     assert r1.id == r2.id
+
+
+@pytest.mark.asyncio
+async def test_refinement_lineage_does_not_count_as_wore_instead(
+    db_session, studio_user, wardrobe_items
+):
+    service = StudioService(db_session)
+    shirt, jeans, sneakers, jacket = wardrobe_items[:4]
+    original = await service.create_from_scratch(
+        user=studio_user,
+        item_ids=[shirt.id, jeans.id, sneakers.id],
+        occasion="casual",
+        name=None,
+        scheduled_for=date.today(),
+        mark_worn=False,
+        source_item_id=None,
+    )
+    await db_session.flush()
+    refinement = Outfit(
+        user_id=studio_user.id,
+        occasion="casual",
+        source=OutfitSource.on_demand,
+        status=OutfitStatus.pending,
+        refined_from_outfit_id=original.id,
+    )
+    db_session.add(refinement)
+    await db_session.commit()
+
+    replacement = await service.create_wore_instead(
+        user=studio_user,
+        original_outfit_id=original.id,
+        item_ids=[jacket.id, sneakers.id],
+        rating=None,
+        comment=None,
+        scheduled_for=None,
+    )
+    await db_session.commit()
+
+    assert replacement.id != refinement.id
+    assert replacement.replaces_outfit_id == original.id
+    assert replacement.refined_from_outfit_id is None
 
 
 @pytest.mark.asyncio

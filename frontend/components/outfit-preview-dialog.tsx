@@ -78,6 +78,11 @@ export function OutfitPreviewDialog({ outfit: initialOutfit, open, onClose, isOw
     setCurrentIndex((prev) => (prev === items.length - 1 ? 0 : prev + 1));
   };
 
+  const handleVersionChange = (nextOutfit: Outfit) => {
+    setOutfit(nextOutfit);
+    setCurrentIndex((previous) => Math.min(previous, Math.max(0, nextOutfit.items.length - 1)));
+  };
+
   const handleRotate = async (direction: 'cw' | 'ccw') => {
     try {
       await rotateImage.mutateAsync({ id: currentItem.id, direction });
@@ -323,7 +328,7 @@ export function OutfitPreviewDialog({ outfit: initialOutfit, open, onClose, isOw
 
           {isOwner && (
             <div className="border-t p-4">
-              <OutfitRefinementPanel outfit={outfit} onVersionChange={setOutfit} />
+              <OutfitRefinementPanel outfit={outfit} onVersionChange={handleVersionChange} />
             </div>
           )}
 

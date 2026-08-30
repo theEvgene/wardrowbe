@@ -123,15 +123,15 @@ async def resolve_style_weather(user: User, scheduled_for: date) -> WeatherData:
     average_temperature = round((forecast.temp_min + forecast.temp_max) / 2, 1)
     return WeatherData(
         temperature=average_temperature,
-        feels_like=round(forecast.temp_max, 1),
-        humidity=50,
+        feels_like=forecast.feels_like,
+        humidity=forecast.humidity,
         precipitation_chance=forecast.precipitation_chance,
-        precipitation_mm=0,
-        wind_speed=0,
+        precipitation_mm=forecast.precipitation_mm,
+        wind_speed=forecast.wind_speed,
         condition=forecast.condition,
         condition_code=forecast.condition_code,
         is_day=True,
-        uv_index=0,
+        uv_index=forecast.uv_index,
         timestamp=datetime.combine(scheduled_for, time(hour=12)),
     )
 
@@ -316,6 +316,7 @@ class OutfitResponse(BaseModel):
     status: str
     name: str | None = None
     replaces_outfit_id: UUID | None = None
+    refined_from_outfit_id: UUID | None = None
     cloned_from_outfit_id: UUID | None = None
     source: str
     reasoning: str | None = None
@@ -365,6 +366,22 @@ class OutfitRefinementRequest(BaseModel):
 
 class OutfitRefinementHistoryResponse(BaseModel):
     outfits: list[OutfitResponse]
+
+
+class PublicGenerationContext(BaseModel):
+    """Explicit allow-list for context visible across a family boundary."""
+
+    time_of_day: str | None = None
+    activity: str | None = None
+
+
+def public_generation_context(context: dict | None) -> dict | None:
+    if context is None:
+        return None
+    return PublicGenerationContext(
+        time_of_day=context.get("time_of_day"),
+        activity=context.get("activity"),
+    ).model_dump(exclude_none=True)
 
 
 class BulkOutfitFilters(BaseModel):
@@ -493,6 +510,7 @@ def outfit_to_response(
     outfit: Outfit,
     wore_instead_items_map: dict[str, list[WoreInsteadItem]] | None = None,
     is_starter_suggestion: bool = False,
+    public_context: bool = False,
 ) -> OutfitResponse:
     items = []
     for outfit_item in sorted(outfit.items, key=lambda x: x.position):
@@ -562,6 +580,7 @@ def outfit_to_response(
         status=outfit.status.value,
         name=outfit.name,
         replaces_outfit_id=outfit.replaces_outfit_id,
+        refined_from_outfit_id=outfit.refined_from_outfit_id,
         cloned_from_outfit_id=outfit.cloned_from_outfit_id,
         source=outfit.source.value,
         reasoning=outfit.reasoning,
@@ -572,7 +591,11 @@ def outfit_to_response(
         notes=outfit.notes,
         highlights=highlights,
         weather=outfit.weather_data,
-        generation_context=outfit.generation_context,
+        generation_context=(
+            public_generation_context(outfit.generation_context)
+            if public_context
+            else outfit.generation_context
+        ),
         items=items,
         feedback=feedback_summary,
         family_ratings=family_ratings_list,
@@ -847,7 +870,10 @@ async def list_outfits(
 
     wore_instead_map = await fetch_wore_instead_items_map(db, outfits, user_id=current_user.id)
 
-    outfit_responses = [outfit_to_response(o, wore_instead_map) for o in outfits]
+    outfit_responses = [
+        outfit_to_response(o, wore_instead_map, public_context=family_member_id is not None)
+        for o in outfits
+    ]
 
     return OutfitListResponse(
         outfits=outfit_responses,

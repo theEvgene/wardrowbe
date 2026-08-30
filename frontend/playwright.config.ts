@@ -20,7 +20,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `"${process.execPath}" node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3100`,
+    command: `"${process.execPath}" scripts/start-e2e.mjs`,
     url: 'http://127.0.0.1:3100/login',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

@@ -12,6 +12,17 @@ vi.mock('@/lib/hooks/use-items', () => ({
   useRotateImage: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }))
 
+vi.mock('@/components/outfit-refinement-panel', () => ({
+  OutfitRefinementPanel: ({ onVersionChange }: { onVersionChange: (outfit: Outfit) => void }) => (
+    <button
+      type="button"
+      onClick={() => onVersionChange({ ...outfit, id: 'short-version', items: [outfit.items[0]] })}
+    >
+      Select shorter version
+    </button>
+  ),
+}))
+
 const outfit: Outfit = {
   id: 'outfit-1',
   occasion: 'casual',
@@ -61,5 +72,18 @@ describe('OutfitPreviewDialog', () => {
     expect(screen.queryByTestId('outfit-composite')).not.toBeInTheDocument()
     expect(screen.getByAltText('Shirt')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'rotateLeft' })).toBeInTheDocument()
+  })
+
+  it('clamps item inspection when a selected version has fewer items', () => {
+    render(<OutfitPreviewDialog outfit={outfit} open onClose={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'itemView' }))
+    fireEvent.click(screen.getByRole('button', { name: 'P' }))
+    expect(screen.getByAltText('Pants')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select shorter version' }))
+
+    expect(screen.getByAltText('Shirt')).toBeInTheDocument()
+    expect(screen.getByText('1 / 1')).toBeInTheDocument()
   })
 })

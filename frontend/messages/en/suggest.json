@@ -95,11 +95,13 @@
     "viewItemDetails": "View item details"
   },
   "refinement": {
+    "activeVersion": "Active version",
     "description": "Ask for a change. Every reply creates a new outfit version.",
     "error": "Could not refine this outfit. Please try again.",
     "instruction": "Tell the stylist what to change",
     "original": "Original outfit",
     "placeholder": "For example: make it more relaxed or swap the shoes",
+    "selectVersion": "Open version {number}",
     "stylist": "Stylist",
     "submit": "Refine outfit",
     "submitting": "Refining…",

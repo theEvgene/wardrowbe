@@ -42,11 +42,16 @@ import { Item, Outfit, StyleBatchResponse } from '@/lib/types';
 import { useOccasions } from '@/lib/hooks/use-translated-constants';
 import { useWeather, Weather } from '@/lib/hooks/use-weather';
 import { usePreferences } from '@/lib/hooks/use-preferences';
+import { useUserProfile } from '@/lib/hooks/use-user';
 import { cn } from '@/lib/utils';
 import { TempUnit, formatTemp, displayValue } from '@/lib/temperature';
 import { DetectedStyleSelector } from '@/components/detected-style-selector';
 import { OutfitCompositePreview } from '@/components/outfit-composite-preview';
-import { buildStyleBatchRequest, getStyleDateBounds } from '@/lib/style-outfits';
+import {
+  buildStyleBatchRequest,
+  getStyleDateBounds,
+  getTimeOfDayMessageKey,
+} from '@/lib/style-outfits';
 import { StyleGenerationError } from '@/components/style-generation-error';
 import { ItemPicker } from '@/components/shared/item-picker';
 import { OutfitRefinementPanel } from '@/components/outfit-refinement-panel';
@@ -271,7 +276,12 @@ function OutfitResult({
             <h3 className="font-semibold">{t('context.usedTitle')}</h3>
             <div className="grid gap-2 sm:grid-cols-2 text-muted-foreground">
               {outfit.generation_context.time_of_day && (
-                <p><span className="font-medium text-foreground">{t('context.timeOfDay')}:</span> {outfit.generation_context.time_of_day}</p>
+                <p>
+                  <span className="font-medium text-foreground">{t('context.timeOfDay')}:</span>{' '}
+                  {getTimeOfDayMessageKey(outfit.generation_context.time_of_day)
+                    ? t(getTimeOfDayMessageKey(outfit.generation_context.time_of_day)!)
+                    : outfit.generation_context.time_of_day}
+                </p>
               )}
               {outfit.generation_context.activity && (
                 <p><span className="font-medium text-foreground">{t('context.activity')}:</span> {outfit.generation_context.activity}</p>
@@ -388,11 +398,13 @@ export default function SuggestPage() {
   const { data: session } = useSession();
   const { data: weather, isLoading: weatherLoading } = useWeather();
   const { data: prefs } = usePreferences();
+  const { data: userProfile } = useUserProfile();
   const temperatureUnit: TempUnit = prefs?.temperature_unit === 'fahrenheit' ? 'fahrenheit' : 'celsius';
   const [selectedOccasion, setSelectedOccasion] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
   const [outfitCount, setOutfitCount] = useState(3);
-  const dateBounds = getStyleDateBounds();
+  const userTimezone = userProfile?.timezone || 'UTC';
+  const dateBounds = getStyleDateBounds(new Date(), userTimezone);
   const [scheduledFor, setScheduledFor] = useState(dateBounds.min);
   const [timeOfDay, setTimeOfDay] = useState<'morning' | 'afternoon' | 'evening' | 'night' | 'full day' | ''>('');
   const [activity, setActivity] = useState('');
@@ -411,6 +423,10 @@ export default function SuggestPage() {
       setOccasionInitialized(true);
     }
   }, [prefs, occasionInitialized, selectedOccasion]);
+
+  useEffect(() => {
+    setScheduledFor(dateBounds.min);
+  }, [dateBounds.min, userTimezone]);
 
   const handleGenerate = async () => {
     if (!selectedOccasion || !selectedStyle) return;
@@ -485,7 +501,7 @@ export default function SuggestPage() {
     setOutfits([]);
     setSelectedOccasion(null);
     setSelectedStyle(null);
-    setScheduledFor(getStyleDateBounds().min);
+    setScheduledFor(getStyleDateBounds(new Date(), userTimezone).min);
     setTimeOfDay('');
     setActivity('');
     setRequiredItemIds(new Set());

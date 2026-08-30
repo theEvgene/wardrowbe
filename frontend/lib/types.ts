@@ -405,6 +405,7 @@ export type OutfitSource = 'scheduled' | 'on_demand' | 'manual' | 'pairing' | 'e
 export interface Outfit {
   id: string;
   replaces_outfit_id?: string | null;
+  refined_from_outfit_id?: string | null;
   occasion: string;
   target_style?: string | null;
   scheduled_for: string;

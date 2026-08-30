@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildStyleBatchRequest, getStyleDateBounds } from '@/lib/style-outfits';
+import {
+  buildStyleBatchRequest,
+  getStyleDateBounds,
+  getTimeOfDayMessageKey,
+} from '@/lib/style-outfits';
 
 describe('buildStyleBatchRequest', () => {
   it('sends the selected detected style and default batch size', () => {
@@ -43,9 +47,18 @@ describe('buildStyleBatchRequest', () => {
   });
 
   it('exposes an inclusive today-through-plus-15 date range', () => {
-    expect(getStyleDateBounds(new Date('2026-08-30T12:00:00'))).toEqual({
+    expect(getStyleDateBounds(new Date('2026-08-30T12:00:00Z'), 'UTC')).toEqual({
       min: '2026-08-30',
       max: '2026-09-14',
+    });
+  });
+
+  it('uses the saved user timezone at a calendar-day boundary', () => {
+    expect(
+      getStyleDateBounds(new Date('2026-08-30T01:00:00Z'), 'America/Los_Angeles'),
+    ).toEqual({
+      min: '2026-08-29',
+      max: '2026-09-13',
     });
   });
 
@@ -57,5 +70,10 @@ describe('buildStyleBatchRequest', () => {
         excludedItemIds: ['same-id'],
       }),
     ).toThrow('required and excluded');
+  });
+
+  it('maps persisted time-of-day values to localized message keys', () => {
+    expect(getTimeOfDayMessageKey('evening')).toBe('context.times.evening');
+    expect(getTimeOfDayMessageKey('full day')).toBe('context.times.fullDay');
   });
 });
