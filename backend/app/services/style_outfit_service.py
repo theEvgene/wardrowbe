@@ -66,6 +66,12 @@ class StyleOutfitService:
             return False
         if temperature >= 20 and item_type == "shoes" and subtype in {"ankle", "chukka"}:
             return False
+        warm_seasons = {"spring", "summer", "all-season"}
+        role = ITEM_ROLE.get(item_type)
+        if temperature >= 20 and role in {"base_top", "full_body", "outer_layer", "mid_layer"}:
+            seasons = {season.strip().lower() for season in (item.season or []) if season}
+            if seasons and not seasons & warm_seasons:
+                return False
         return True
 
     @staticmethod

@@ -136,9 +136,11 @@ class TestStyleOutfitService:
     def test_warm_weather_excludes_boots_from_generation_candidates(self) -> None:
         boots = ClothingItem(type="boots", subtype="ankle", season=["fall", "winter"])
         sneakers = ClothingItem(type="shoes", subtype="sneakers", season=["all-season"])
+        flannel = ClothingItem(type="shirt", subtype="flannel", season=["fall", "winter"])
 
         assert StyleOutfitService._is_weather_suitable(boots, {"temperature": 23}) is False
         assert StyleOutfitService._is_weather_suitable(sneakers, {"temperature": 23}) is True
+        assert StyleOutfitService._is_weather_suitable(flannel, {"temperature": 23}) is False
 
     def test_prompt_explicitly_applies_context_without_allowing_safety_override(self) -> None:
         item = ClothingItem(type="shirt", primary_color="blue", style=["casual"])
