@@ -466,6 +466,13 @@ export interface OutfitGenerationContext {
     note?: string | null;
   };
   applied_preferences?: Record<string, unknown>;
+  capsule_summary?: {
+    strategy?: string;
+    requested_outfits?: number;
+    unique_key_items?: number;
+    key_item_reuse_ratio?: number;
+    preferred_core_sets?: number[][];
+  };
   refinement?: {
     instruction: string;
     turn: number;

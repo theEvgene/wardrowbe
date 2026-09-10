@@ -29,6 +29,8 @@ import {
   Snowflake,
   CalendarDays,
   CloudLightning,
+  Layers,
+  Repeat2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -208,6 +210,40 @@ function OccasionChips({
         );
       })}
     </div>
+  );
+}
+
+function CapsuleSummary({ outfit, t }: { outfit: Outfit; t: Translator }) {
+  const summary = outfit.generation_context?.capsule_summary;
+  if (!summary) return null;
+
+  const reusePercent = Math.round((summary.key_item_reuse_ratio ?? 0) * 100);
+  return (
+    <Card data-testid="capsule-summary" className="border-primary/20 bg-primary/5">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Layers className="h-4 w-4 text-primary" />
+          <h2 className="font-semibold">{t('capsule.title')}</h2>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3 text-sm">
+          <div>
+            <p className="text-2xl font-semibold">{summary.requested_outfits ?? 0}</p>
+            <p className="text-muted-foreground">{t('capsule.outfits')}</p>
+          </div>
+          <div>
+            <p className="text-2xl font-semibold">{summary.unique_key_items ?? 0}</p>
+            <p className="text-muted-foreground">{t('capsule.uniqueItems')}</p>
+          </div>
+          <div>
+            <p className="flex items-center gap-1 text-2xl font-semibold">
+              <Repeat2 className="h-5 w-5" /> {reusePercent}%
+            </p>
+            <p className="text-muted-foreground">{t('capsule.reuse')}</p>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">{t('capsule.description')}</p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -707,6 +743,7 @@ export default function SuggestPage() {
         </div>
       ) : (
         <div className="space-y-10">
+          <CapsuleSummary outfit={outfits[0]} t={t} />
           {outfits.map((outfit) => (
             <OutfitResult
               key={outfit.id}

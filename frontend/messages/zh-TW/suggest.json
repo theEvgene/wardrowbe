@@ -1,5 +1,12 @@
 {
   "context": {
+    "capsule": {
+      "title": "Capsule summary",
+      "outfits": "outfits",
+      "uniqueItems": "unique key items",
+      "reuse": "item reuse",
+      "description": "The batch prioritizes reusable items while keeping each outfit distinct."
+    },
     "activity": "活動",
     "activityPlaceholder": "例如：辦公室、散步、晚餐",
     "anyTime": "不限時間",
