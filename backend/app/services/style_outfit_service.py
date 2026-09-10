@@ -53,6 +53,22 @@ class StyleOutfitService:
         return sorted(result.scalars().all(), key=lambda item: (item.type or "", str(item.id)))
 
     @staticmethod
+    def _is_weather_suitable(item: ClothingItem, weather_data: dict | None) -> bool:
+        """Reject clearly seasonally wrong footwear before AI sees the wardrobe."""
+        if not weather_data:
+            return True
+        temperature = weather_data.get("temperature")
+        if not isinstance(temperature, (int, float)):
+            return True
+        item_type = (item.type or "").lower()
+        subtype = (item.subtype or "").lower()
+        if temperature >= 20 and (item_type == "boots" or subtype == "boots"):
+            return False
+        if temperature >= 20 and item_type == "shoes" and subtype in {"ankle", "chukka"}:
+            return False
+        return True
+
+    @staticmethod
     def _valid_core_number_sets(items: list[ClothingItem], limit: int = 200) -> list[list[int]]:
         by_role: dict[str, list[int]] = {}
         for number, item in enumerate(items, 1):
@@ -310,7 +326,9 @@ class StyleOutfitService:
         candidates = [
             item
             for item in all_candidates
-            if item.id not in excluded_ids and not (item_colors(item) & avoided_colors)
+            if item.id not in excluded_ids
+            and not (item_colors(item) & avoided_colors)
+            and self._is_weather_suitable(item, weather_data)
         ]
         if len(candidates) < 2:
             raise InsufficientWardrobeError(
