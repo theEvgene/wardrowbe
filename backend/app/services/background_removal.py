@@ -17,7 +17,7 @@ from app.utils.clothing import ITEM_ROLE
 logger = logging.getLogger(__name__)
 
 BackgroundRemovalMode = Literal["scene", "garment"]
-GarmentCategory = Literal["upper", "lower", "full"]
+GarmentCategory = Literal["upper", "lower", "full", "footwear", "bag"]
 MIN_GARMENT_MASK_AREA_RATIO = 0.01
 MAX_GARMENT_MASK_AREA_RATIO = 0.95
 MIN_LARGEST_COMPONENT_RATIO = 0.85
@@ -30,6 +30,7 @@ _GARMENT_CATEGORY_BY_ROLE: dict[str, GarmentCategory] = {
     "outer_layer": "upper",
     "bottom": "lower",
     "full_body": "full",
+    "footwear": "footwear",
 }
 
 
@@ -43,6 +44,8 @@ def _installed_package_version(package: str) -> str | None:
 def garment_category_for_item_type(item_type: str) -> GarmentCategory | None:
     """Map Wardrowbe's item type to a cloth-segmentation category."""
 
+    if item_type == "bag":
+        return "bag"
     role = ITEM_ROLE.get(item_type)
     return _GARMENT_CATEGORY_BY_ROLE.get(role) if role else None
 
@@ -152,11 +155,19 @@ class RembgProvider(BackgroundRemovalProvider):
     ) -> BackgroundRemovalResult:
         from rembg import remove
 
-        result = remove(
-            image,
-            session=self._get_cloth_session(),
-            cloth_category=garment_category,
-        ).convert("RGBA")
+        # u2net_cloth_seg only understands clothing categories (upper/lower/full).
+        # Footwear and bags are still single foreground objects, so use the
+        # generic foreground model while keeping the garment extraction contract.
+        if garment_category in ("footwear", "bag"):
+            result = remove(image, session=self._get_session()).convert("RGBA")
+            model = self.model
+        else:
+            result = remove(
+                image,
+                session=self._get_cloth_session(),
+                cloth_category=garment_category,
+            ).convert("RGBA")
+            model = "u2net_cloth_seg"
         mask_area_ratio = self._mask_area_ratio(result)
         largest_component_ratio = self._largest_component_ratio(result)
         metrics = {
@@ -180,7 +191,7 @@ class RembgProvider(BackgroundRemovalProvider):
                 mode="garment",
                 provider="rembg",
                 provider_version=_installed_package_version("rembg"),
-                model="u2net_cloth_seg",
+                model=model,
                 garment_category=garment_category,
                 warning=warning,
                 metrics=metrics,
@@ -191,7 +202,7 @@ class RembgProvider(BackgroundRemovalProvider):
             image=result,
             provider="rembg",
             provider_version=_installed_package_version("rembg"),
-            model="u2net_cloth_seg",
+            model=model,
             garment_category=garment_category,
             metrics=metrics,
         )

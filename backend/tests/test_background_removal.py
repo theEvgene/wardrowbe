@@ -54,7 +54,15 @@ def test_shirt_maps_to_upper_garment_category() -> None:
     assert garment_category_for_item_type("shirt") == "upper"
 
 
-def test_unsupported_garment_type_does_not_change_image(tmp_path: Path) -> None:
+def test_footwear_and_bag_map_to_garment_categories() -> None:
+    assert garment_category_for_item_type("shoes") == "footwear"
+    assert garment_category_for_item_type("sneakers") == "footwear"
+    assert garment_category_for_item_type("boots") == "footwear"
+    assert garment_category_for_item_type("sandals") == "footwear"
+    assert garment_category_for_item_type("bag") == "bag"
+
+
+def test_unknown_garment_type_does_not_change_image(tmp_path: Path) -> None:
     image_path = tmp_path / "item.jpg"
     _make_rgb_image().save(image_path, format="JPEG")
     original_bytes = image_path.read_bytes()
@@ -63,12 +71,40 @@ def test_unsupported_garment_type_does_not_change_image(tmp_path: Path) -> None:
     result = svc.remove_background(
         "item.jpg",
         mode="garment",
-        item_type="shoes",
+        item_type="unknown",
     )
 
     assert result["outcome"] == "unsupported"
     assert image_path.read_bytes() == original_bytes
     assert not (tmp_path / "item_orig.jpg").exists()
+
+
+def test_footwear_extraction_uses_generic_foreground_model(tmp_path: Path) -> None:
+    image_path = tmp_path / "shoe.jpg"
+    _make_rgb_image().save(image_path, format="JPEG")
+    svc = ImageService(storage_path=str(tmp_path))
+    provider = MagicMock(spec=BackgroundRemovalProvider)
+    provider.remove.return_value = BackgroundRemovalResult(
+        outcome="accepted",
+        mode="garment",
+        image=_make_garment_cutout(),
+        provider="rembg",
+        model="u2net",
+        garment_category="footwear",
+        metrics={"mask_area_ratio": 0.36},
+    )
+
+    with patch("app.services.background_removal.get_provider", return_value=provider):
+        result = svc.remove_background("shoe.jpg", mode="garment", item_type="sneakers")
+
+    assert result["outcome"] == "accepted"
+    assert result["garment_category"] == "footwear"
+    assert (tmp_path / "shoe_cutout.png").exists()
+    provider.remove.assert_called_once()
+    call_args, call_kwargs = provider.remove.call_args
+    assert call_args[0].mode == "RGB"
+    assert call_args[0].size == (100, 100)
+    assert call_kwargs == {"mode": "garment", "garment_category": "footwear"}
 
 
 def test_low_quality_garment_result_does_not_change_image(tmp_path: Path) -> None:

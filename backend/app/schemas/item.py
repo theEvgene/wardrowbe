@@ -91,7 +91,7 @@ class BackgroundRemovalMetadata(BaseModel):
     provider: str | None = None
     provider_version: str | None = None
     model: str | None = None
-    garment_category: Literal["upper", "lower", "full"] | None = None
+    garment_category: Literal["upper", "lower", "full", "footwear", "bag"] | None = None
     transparent_path: str | None = None
     warning: str | None = None
     metrics: dict[str, float] = Field(default_factory=dict)

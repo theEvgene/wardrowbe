@@ -155,6 +155,44 @@ class TestTaggingExtractionHandoff:
         assert result["status"] == "success"
         redis.enqueue_job.assert_not_awaited()
 
+    @pytest.mark.asyncio
+    async def test_successful_tagging_queues_extraction_for_footwear_and_bag(
+        self, db_session: AsyncSession, test_user, monkeypatch
+    ) -> None:
+        item = ClothingItem(
+            user_id=test_user.id,
+            type="unknown",
+            image_path="test/footwear-auto-extract.jpg",
+            status=ItemStatus.processing,
+        )
+        db_session.add(item)
+        await db_session.commit()
+
+        class StubAI:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def analyze_image(self, path):
+                return ClothingTags(type="sneakers", primary_color="white", confidence=0.9)
+
+        settings = tagging.get_settings().model_copy(update={"garment_matching_enabled": False})
+        monkeypatch.setattr(tagging, "AIService", StubAI)
+        monkeypatch.setattr(tagging, "get_settings", lambda: settings)
+        redis = AsyncMock()
+
+        with (
+            patch("app.workers.tagging.get_db_session", return_value=db_session),
+            patch.object(db_session, "close", new_callable=AsyncMock),
+        ):
+            result = await tagging.tag_item_image(
+                {"redis": redis}, str(item.id), __file__, auto_extract=True
+            )
+
+        assert result["status"] == "success"
+        redis.enqueue_job.assert_awaited_once_with(
+            "extract_item_garment", str(item.id), _queue_name="arq:tagging"
+        )
+
 
 class TestAutomaticGarmentExtraction:
     @pytest.mark.asyncio
