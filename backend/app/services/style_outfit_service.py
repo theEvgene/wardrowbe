@@ -454,6 +454,7 @@ class StyleOutfitService:
             timeout=max(float(get_settings().ai_timeout), 120.0),
             max_retries=1,
             total_timeout=max(float(get_settings().ai_timeout), 120.0),
+            max_tokens=500,
         )
         accepted: list[tuple[dict, list[ClothingItem], str, str]] = []
         accepted_key_sets: set[frozenset[UUID]] = set()

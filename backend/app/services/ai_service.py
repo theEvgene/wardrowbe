@@ -265,6 +265,7 @@ class AIService:
         timeout: float | None = None,
         max_retries: int | None = None,
         total_timeout: float | None = None,
+        max_tokens: int | None = None,
     ):
         """
         Initialize AI service with optional custom endpoints.
@@ -283,6 +284,7 @@ class AIService:
         self.timeout = timeout if timeout is not None else self.settings.ai_timeout
         self.max_retries = max_retries if max_retries is not None else self.settings.ai_max_retries
         self.total_timeout = total_timeout
+        self.max_tokens = max_tokens if max_tokens is not None else self.settings.ai_max_tokens
         self.api_key = self.settings.ai_api_key
 
         # Build endpoint list
@@ -477,7 +479,7 @@ class AIService:
                             "model": model,
                             "messages": messages,
                             "stream": False,
-                            "max_tokens": self.settings.ai_max_tokens,
+                            "max_tokens": self.max_tokens,
                         }
                         if use_logprobs:
                             request_body["logprobs"] = True
