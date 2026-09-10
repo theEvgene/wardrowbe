@@ -1,0 +1,42 @@
+[
+  {
+    "name": "canvas-smart-casual",
+    "expected": "accept",
+    "weather": {"temperature": 23},
+    "items": [
+      {"id": "navy-shirt", "type": "shirt", "primary_color": "navy", "formality": "smart-casual"},
+      {"id": "beige-chinos", "type": "pants", "subtype": "chinos", "primary_color": "beige", "formality": "smart-casual"},
+      {"id": "dark-loafers", "type": "shoes", "subtype": "loafers", "primary_color": "navy", "formality": "smart-casual"}
+    ]
+  },
+  {
+    "name": "canvas-casual-denim",
+    "expected": "accept",
+    "weather": {"temperature": 23},
+    "items": [
+      {"id": "white-tee", "type": "t-shirt", "primary_color": "white", "formality": "casual"},
+      {"id": "light-jeans", "type": "jeans", "subtype": "jeans", "primary_color": "blue", "formality": "casual"},
+      {"id": "light-sneakers", "type": "sneakers", "primary_color": "white", "formality": "casual"}
+    ]
+  },
+  {
+    "name": "bad-denim-loafers",
+    "expected": "reject",
+    "weather": {"temperature": 23},
+    "items": [
+      {"id": "casual-tee", "type": "t-shirt", "primary_color": "white", "formality": "casual"},
+      {"id": "blue-jeans", "type": "jeans", "subtype": "jeans", "primary_color": "blue", "formality": "casual"},
+      {"id": "khaki-loafers", "type": "shoes", "subtype": "loafers", "primary_color": "khaki", "formality": "smart-casual"}
+    ]
+  },
+  {
+    "name": "bad-warm-weather-boots",
+    "expected": "reject",
+    "weather": {"temperature": 24},
+    "items": [
+      {"id": "navy-polo", "type": "polo", "primary_color": "navy", "formality": "casual"},
+      {"id": "beige-chinos-2", "type": "pants", "subtype": "chinos", "primary_color": "beige", "formality": "casual"},
+      {"id": "winter-boots", "type": "boots", "primary_color": "black", "formality": "casual"}
+    ]
+  }
+]

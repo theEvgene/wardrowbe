@@ -381,17 +381,19 @@ class TestStyleOutfitService:
         assert outfit["scheduled_for"] == scheduled_for.isoformat()
         assert outfit["weather"]["temperature"] == 16.0
         assert ForecastWeatherStub.calls == [(55.75, 37.62, 2)]
-        assert outfit["generation_context"] | {"applied_preferences": None} == {
-            "time_of_day": "evening",
-            "activity": "Dinner with friends",
-            "constraints": {
-                "required_item_ids": [str(wardrobe[0].id)],
-                "excluded_item_ids": [],
-                "avoided_colors": ["orange"],
-                "note": "Prefer light layers",
-            },
-            "applied_preferences": None,
+        generation_context = outfit["generation_context"]
+        assert generation_context["time_of_day"] == "evening"
+        assert generation_context["activity"] == "Dinner with friends"
+        assert generation_context["constraints"] == {
+            "required_item_ids": [str(wardrobe[0].id)],
+            "allowed_item_ids": [],
+            "excluded_item_ids": [],
+            "avoided_colors": ["orange"],
+            "note": "Prefer light layers",
         }
+        assert generation_context["capsule_summary"]["strategy"] == (
+            "reuse-first deterministic selection"
+        )
         assert outfit["generation_context"]["applied_preferences"]["variety_level"] == "moderate"
 
         detail = await client.get(f"/api/v1/outfits/{outfit['id']}", headers=auth_headers)
@@ -733,30 +735,31 @@ class TestStyleOutfitService:
 
         monkeypatch.setattr("app.services.style_outfit_service.AIService", OmittingAI)
 
-        with pytest.raises(AIRecommendationError, match="after 3 attempts"):
-            await StyleOutfitService(db_session).generate(
-                user=test_user,
-                target_style="casual",
-                count=1,
-                generation_context={
-                    "time_of_day": None,
-                    "activity": None,
-                    "constraints": {
-                        "required_item_ids": [str(required_shirt.id)],
-                        "excluded_item_ids": [],
-                        "avoided_colors": [],
-                        "note": None,
-                    },
+        outfits = await StyleOutfitService(db_session).generate(
+            user=test_user,
+            target_style="casual",
+            count=1,
+            generation_context={
+                "time_of_day": None,
+                "activity": None,
+                "constraints": {
+                    "required_item_ids": [str(required_shirt.id)],
+                    "excluded_item_ids": [],
+                    "avoided_colors": [],
+                    "note": None,
                 },
-            )
+            },
+        )
 
         assert OmittingAI.calls == 3
+        assert len(outfits) == 1
+        assert required_shirt.id in {item.item_id for item in outfits[0].items}
         persisted = list(
             (await db_session.execute(select(Outfit).where(Outfit.user_id == test_user.id)))
             .scalars()
             .all()
         )
-        assert persisted == []
+        assert len(persisted) == 1
 
     @pytest.mark.asyncio
     async def test_rejects_a_recent_outfit_set_and_repairs_with_fresh_key_pieces(
@@ -1017,8 +1020,17 @@ class TestAdversarialStyleGeneration:
 
         monkeypatch.setattr("app.services.style_outfit_service.AIService", AdversarialAI)
 
-        with pytest.raises(AIRecommendationError, match="after 3 attempts"):
-            await StyleOutfitService(db_session).generate(
+        if response_kind == "duplicate-sets":
+            with pytest.raises(AIRecommendationError, match="after 3 attempts"):
+                await StyleOutfitService(db_session).generate(
+                    user=test_user,
+                    target_style="casual",
+                    count=2,
+                    occasion="casual",
+                )
+            outfits = []
+        else:
+            outfits = await StyleOutfitService(db_session).generate(
                 user=test_user,
                 target_style="casual",
                 count=2,
@@ -1026,6 +1038,10 @@ class TestAdversarialStyleGeneration:
             )
 
         assert AdversarialAI.calls == 3
+        assert len(outfits) == (0 if response_kind == "duplicate-sets" else 2)
+        assert len({frozenset(item.item_id for item in outfit.items) for outfit in outfits}) == (
+            0 if response_kind == "duplicate-sets" else 2
+        )
         persisted = list(
             (
                 await db_session.execute(
@@ -1038,4 +1054,4 @@ class TestAdversarialStyleGeneration:
             .scalars()
             .all()
         )
-        assert persisted == []
+        assert len(persisted) == (0 if response_kind == "duplicate-sets" else 2)

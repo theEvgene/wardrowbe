@@ -19,6 +19,7 @@ from app.models.outfit import (
 from app.models.preference import UserPreference
 from app.models.user import User
 from app.services.ai_service import AIService, require_internal_ai
+from app.services.capsule_rules import is_compatible, select_capsule_sets
 from app.services.recommendation_service import AIRecommendationError, InsufficientWardrobeError
 from app.utils.clothing import ITEM_ROLE, canonical_item_order, normalize_style_labels
 from app.utils.timezone import get_user_today
@@ -313,6 +314,12 @@ class StyleOutfitService:
         }
         item_by_id = {item.id: item for item in all_candidates}
 
+        forbidden_item_pairs = {
+            frozenset(str(item_id) for item_id in pair)
+            for pair in (context.get("style_guardrails", {}).get("forbidden_item_pairs", []) or [])
+            if isinstance(pair, list) and len(pair) == 2
+        }
+
         def item_colors(item: ClothingItem) -> set[str]:
             return {
                 color.strip().lower()
@@ -355,6 +362,14 @@ class StyleOutfitService:
                 self._validate_selection({"items": proposed}, number_map)
             except AIRecommendationError:
                 continue
+            selected = [number_map[number] for number in proposed]
+            compatible, _reason = is_compatible(
+                selected,
+                weather_data=weather_data,
+                forbidden_item_pairs=forbidden_item_pairs,
+            )
+            if not compatible:
+                continue
             if proposed not in valid_core_sets:
                 valid_core_sets.append(proposed)
         if len(valid_core_sets) < count:
@@ -367,6 +382,8 @@ class StyleOutfitService:
                 f"Only {len(valid_core_sets)} distinct complete outfits can be built after "
                 f"applying constraints; {count} requested"
             )
+
+        preferred_core_sets = select_capsule_sets(valid_core_sets, count)
 
         recent_key_sets: set[frozenset[UUID]] = set()
         repeat_days = max(int(preference_snapshot["avoid_repeat_days"] or 0), 0)
@@ -409,6 +426,10 @@ class StyleOutfitService:
             **context,
             "weather": weather_data,
             "recent_key_piece_sets_to_avoid": recent_number_sets,
+            "capsule_plan": {
+                "objective": "reuse active key pieces while keeping every outfit distinct",
+                "preferred_core_sets": preferred_core_sets,
+            },
         }
         base_prompt = self._prompt(
             candidates,
@@ -449,6 +470,13 @@ class StyleOutfitService:
                 try:
                     safe_proposal = self._validated_proposal(proposal)
                     selected = self._validate_selection(safe_proposal, number_map)
+                    compatible, reason = is_compatible(
+                        selected,
+                        weather_data=weather_data,
+                        forbidden_item_pairs=forbidden_item_pairs,
+                    )
+                    if not compatible:
+                        raise AIRecommendationError(reason or "Outfit fails style compatibility rules")
                     selected_ids = {item.id for item in selected}
                     if not required_ids <= selected_ids:
                         raise AIRecommendationError("Outfit omits a required wardrobe item")
@@ -483,18 +511,7 @@ class StyleOutfitService:
                     for core_set in valid_core_sets
                     if len(core_set) == len(set(core_set))
                 ]
-                used_numbers: set[int] = set()
-                while remaining_sets and len(fallback_sets) < count:
-                    selected_set = max(
-                        remaining_sets,
-                        key=lambda core_set: (
-                            len(set(core_set) - used_numbers),
-                            len(set(core_set)),
-                        ),
-                    )
-                    fallback_sets.append(selected_set)
-                    used_numbers.update(selected_set)
-                    remaining_sets.remove(selected_set)
+                fallback_sets = select_capsule_sets(remaining_sets, count)
 
                 for index, core_set in enumerate(fallback_sets):
                     selected = [number_map[number] for number in core_set]
@@ -519,6 +536,29 @@ class StyleOutfitService:
                     f"Could not generate {count} valid diverse outfits after "
                     f"{MAX_GENERATION_ATTEMPTS} attempts. Please retry. Validation: {details}"
                 )
+
+        actual_key_sets = [
+            frozenset(
+                item.id
+                for item in selected
+                if ITEM_ROLE.get((item.type or "").lower())
+                not in {"accessory", "socks", "neckwear"}
+            )
+            for _proposal, selected, _model, _endpoint in accepted
+        ]
+        unique_key_items = len(set().union(*actual_key_sets)) if actual_key_sets else 0
+        total_key_items = sum(len(key_set) for key_set in actual_key_sets)
+        context["capsule_summary"] = {
+            "strategy": "reuse-first deterministic selection",
+            "requested_outfits": count,
+            "unique_key_items": unique_key_items,
+            "key_item_reuse_ratio": round(
+                (total_key_items - unique_key_items) / total_key_items, 3
+            )
+            if total_key_items
+            else 0.0,
+            "preferred_core_sets": preferred_core_sets,
+        }
 
         created: list[Outfit] = []
         try:
