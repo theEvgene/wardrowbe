@@ -173,17 +173,24 @@ class SuggestRequest(BaseModel):
 class StyleBatchConstraintsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    allowed_item_ids: list[UUID] = Field(default_factory=list, max_length=20)
     required_item_ids: list[UUID] = Field(default_factory=list, max_length=20)
     excluded_item_ids: list[UUID] = Field(default_factory=list, max_length=20)
     avoided_colors: list[str] = Field(default_factory=list, max_length=20)
     note: str | None = Field(default=None, max_length=500)
 
-    @field_validator("required_item_ids", "excluded_item_ids")
+    @field_validator("allowed_item_ids", "required_item_ids", "excluded_item_ids")
     @classmethod
     def reject_duplicate_ids(cls, values: list[UUID]) -> list[UUID]:
         if len(values) != len(set(values)):
             raise ValueError("Constraint item IDs must not contain duplicates")
         return values
+
+    @model_validator(mode="after")
+    def require_required_items_in_allow_list(self):
+        if self.allowed_item_ids and not set(self.required_item_ids) <= set(self.allowed_item_ids):
+            raise ValueError("Required items must be included in the allowed item list")
+        return self
 
     @field_validator("avoided_colors")
     @classmethod

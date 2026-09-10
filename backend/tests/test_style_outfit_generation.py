@@ -62,6 +62,14 @@ class TestStyleBatchRequest:
                 },
             )
 
+    def test_capsule_allow_list_requires_required_items_to_be_included(self) -> None:
+        item_id = uuid4()
+        with pytest.raises(ValidationError, match="allowed item list"):
+            StyleBatchRequest(
+                target_style="casual",
+                constraints={"allowed_item_ids": [uuid4()], "required_item_ids": [item_id]},
+            )
+
 
 class PromptAwareAI:
     def __init__(self, *args, **kwargs):

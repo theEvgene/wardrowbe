@@ -261,7 +261,7 @@ class StyleOutfitService:
         constraints = context.get("constraints") or {}
         constrained_ids = {
             UUID(item_id)
-            for field in ("required_item_ids", "excluded_item_ids")
+            for field in ("allowed_item_ids", "required_item_ids", "excluded_item_ids")
             for item_id in constraints.get(field, [])
         }
         candidate_ids = {item.id for item in all_candidates}
@@ -299,6 +299,7 @@ class StyleOutfitService:
         }
         context["applied_preferences"] = preference_snapshot
         required_ids = {UUID(item_id) for item_id in constraints.get("required_item_ids", [])}
+        allowed_ids = {UUID(item_id) for item_id in constraints.get("allowed_item_ids", [])}
         excluded_ids = {UUID(item_id) for item_id in constraints.get("excluded_item_ids", [])} | {
             UUID(item_id) for item_id in preference_snapshot["excluded_item_ids"]
         }
@@ -333,6 +334,7 @@ class StyleOutfitService:
             item
             for item in all_candidates
             if item.id not in excluded_ids
+            and (not allowed_ids or item.id in allowed_ids)
             and not (item_colors(item) & avoided_colors)
             and self._is_weather_suitable(item, weather_data)
         ]
