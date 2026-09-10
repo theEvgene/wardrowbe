@@ -264,6 +264,7 @@ class AIService:
         *,
         timeout: float | None = None,
         max_retries: int | None = None,
+        total_timeout: float | None = None,
     ):
         """
         Initialize AI service with optional custom endpoints.
@@ -281,6 +282,7 @@ class AIService:
             raise AIDisabledError("Internal AI is disabled; defer to an external agent.")
         self.timeout = timeout if timeout is not None else self.settings.ai_timeout
         self.max_retries = max_retries if max_retries is not None else self.settings.ai_max_retries
+        self.total_timeout = total_timeout
         self.api_key = self.settings.ai_api_key
 
         # Build endpoint list
@@ -674,11 +676,20 @@ class AIService:
         messages.append({"role": "user", "content": prompt})
 
         last_error = None
+        deadline = (
+            asyncio.get_running_loop().time() + self.total_timeout
+            if self.total_timeout is not None
+            else None
+        )
 
         for endpoint in self._endpoints:
+            remaining = None if deadline is None else deadline - asyncio.get_running_loop().time()
+            if remaining is not None and remaining <= 0:
+                break
             logger.info(f"Trying text generation via {endpoint.name}")
 
-            async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
+            request_timeout = self.timeout if remaining is None else min(self.timeout, remaining)
+            async with httpx.AsyncClient(timeout=request_timeout, follow_redirects=True) as client:
                 for attempt in range(self.max_retries):
                     try:
                         response = await client.post(

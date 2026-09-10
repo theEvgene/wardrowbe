@@ -419,6 +419,7 @@ class StyleOutfitService:
             # repeat transport failures inside both retry loops.
             timeout=min(float(get_settings().ai_timeout), 30.0),
             max_retries=1,
+            total_timeout=30.0,
         )
         accepted: list[tuple[dict, list[ClothingItem], str, str]] = []
         accepted_key_sets: set[frozenset[UUID]] = set()
