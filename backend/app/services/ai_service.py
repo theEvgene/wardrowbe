@@ -258,7 +258,13 @@ class AIEndpointConfig:
 class AIService:
     """Service for AI-powered image analysis and text generation."""
 
-    def __init__(self, endpoints: list[dict] | None = None):
+    def __init__(
+        self,
+        endpoints: list[dict] | None = None,
+        *,
+        timeout: float | None = None,
+        max_retries: int | None = None,
+    ):
         """
         Initialize AI service with optional custom endpoints.
 
@@ -273,7 +279,8 @@ class AIService:
         self.settings = get_settings()
         if not self.settings.ai_enabled:
             raise AIDisabledError("Internal AI is disabled; defer to an external agent.")
-        self.timeout = self.settings.ai_timeout
+        self.timeout = timeout if timeout is not None else self.settings.ai_timeout
+        self.max_retries = max_retries if max_retries is not None else self.settings.ai_max_retries
         self.api_key = self.settings.ai_api_key
 
         # Build endpoint list
@@ -672,7 +679,7 @@ class AIService:
             logger.info(f"Trying text generation via {endpoint.name}")
 
             async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
-                for attempt in range(self.settings.ai_max_retries):
+                for attempt in range(self.max_retries):
                     try:
                         response = await client.post(
                             f"{endpoint.url}/chat/completions",
@@ -712,7 +719,7 @@ class AIService:
                                 "thinking/reasoning mode for this model."
                             )
                             logger.warning(str(last_error))
-                            if attempt < self.settings.ai_max_retries - 1:
+                            if attempt < self.max_retries - 1:
                                 continue
                             break
 
@@ -731,12 +738,12 @@ class AIService:
                     except httpx.HTTPStatusError as e:
                         last_error = e
                         logger.warning(f"HTTP error from {endpoint.name}: {e}")
-                        if attempt < self.settings.ai_max_retries - 1:
+                        if attempt < self.max_retries - 1:
                             continue
                     except httpx.RequestError as e:
                         last_error = e
                         logger.warning(f"Request error from {endpoint.name}: {e}")
-                        if attempt < self.settings.ai_max_retries - 1:
+                        if attempt < self.max_retries - 1:
                             continue
 
         if last_error:

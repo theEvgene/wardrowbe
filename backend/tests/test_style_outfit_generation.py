@@ -961,6 +961,38 @@ class TestAdversarialStyleGeneration:
         assert len(outfits) == 2
         assert RecoveringAI.calls == 2
 
+    @pytest.mark.asyncio
+    async def test_transport_failure_uses_fallback_without_repeating_stalled_ai_call(
+        self, db_session: AsyncSession, test_user, monkeypatch
+    ) -> None:
+        await _add_generation_wardrobe(db_session, test_user.id)
+
+        class UnavailableAI:
+            calls = 0
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def generate_text(self, prompt: str, return_metadata: bool = False):
+                type(self).calls += 1
+                raise RuntimeError("local AI endpoint timed out")
+
+        monkeypatch.setattr("app.services.style_outfit_service.AIService", UnavailableAI)
+
+        outfits = await StyleOutfitService(db_session).generate(
+            user=test_user,
+            target_style="casual",
+            count=2,
+            occasion="casual",
+        )
+
+        assert UnavailableAI.calls == 1
+        assert len(outfits) == 2
+        assert all(
+            (outfit.ai_raw_response or {}).get("_ai_model") == "deterministic-fallback"
+            for outfit in outfits
+        )
+
     @pytest.mark.parametrize(
         "response_kind",
         [

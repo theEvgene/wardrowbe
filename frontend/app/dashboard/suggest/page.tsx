@@ -39,7 +39,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { api, setAccessToken } from '@/lib/api';
+import { api, getErrorMessage, setAccessToken } from '@/lib/api';
 import { Item, Outfit, StyleBatchResponse } from '@/lib/types';
 import { useOccasions } from '@/lib/hooks/use-translated-constants';
 import { useWeather, Weather } from '@/lib/hooks/use-weather';
@@ -488,7 +488,7 @@ export default function SuggestPage() {
       const result = await api.post<StyleBatchResponse>('/outfits/generate-by-style', request);
       setOutfits(result.outfits);
     } catch (err) {
-      setError(t('error'));
+      setError(getErrorMessage(err, t('error')));
       console.error('Suggestion error:', err);
     } finally {
       setIsGenerating(false);

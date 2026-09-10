@@ -18,6 +18,7 @@ from app.models.outfit import (
 )
 from app.models.preference import UserPreference
 from app.models.user import User
+from app.config import get_settings
 from app.services.ai_service import AIService, require_internal_ai
 from app.services.capsule_rules import is_compatible, select_capsule_sets
 from app.services.recommendation_service import AIRecommendationError, InsufficientWardrobeError
@@ -412,7 +413,12 @@ class StyleOutfitService:
                     recent_key_sets.add(key_set)
 
         ai_service = AIService(
-            endpoints=preferences.ai_endpoints if preferences and preferences.ai_endpoints else None
+            endpoints=preferences.ai_endpoints if preferences and preferences.ai_endpoints else None,
+            # Outfit generation has a validated local fallback. Do not make a
+            # stalled local model block the user for the global AI timeout or
+            # repeat transport failures inside both retry loops.
+            timeout=min(float(get_settings().ai_timeout), 30.0),
+            max_retries=1,
         )
         accepted: list[tuple[dict, list[ClothingItem], str, str]] = []
         accepted_key_sets: set[frozenset[UUID]] = set()
@@ -460,9 +466,12 @@ class StyleOutfitService:
             try:
                 result = await ai_service.generate_text(prompt, return_metadata=True)
                 proposals = self._parse(result.content)
-            except Exception as exc:
+            except AIRecommendationError as exc:
                 validation_errors.append(str(exc) or exc.__class__.__name__)
                 continue
+            except Exception as exc:
+                validation_errors.append(str(exc) or exc.__class__.__name__)
+                break
 
             for proposal in proposals:
                 if len(accepted) == count:
