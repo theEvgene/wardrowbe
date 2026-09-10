@@ -446,11 +446,34 @@ class StyleOutfitService:
                 break
 
         if len(accepted) != count:
-            details = "; ".join(dict.fromkeys(validation_errors[-5:]))
-            raise AIRecommendationError(
-                f"Could not generate {count} valid diverse outfits after "
-                f"{MAX_GENERATION_ATTEMPTS} attempts. Please retry. Validation: {details}"
-            )
+            # A local model can fail to emit the required numbered JSON even
+            # when the wardrobe has enough valid core combinations. Preserve
+            # the hard validation boundary, but keep the user-facing flow
+            # usable by falling back to those already validated combinations.
+            if not accepted:
+                for index, core_set in enumerate(valid_core_sets[:count]):
+                    selected = [number_map[number] for number in core_set]
+                    accepted.append(
+                        (
+                            {
+                                "items": core_set,
+                                "headline": f"{target_style.title()} look {index + 1}",
+                                "styling_tip": (
+                                    "A validated wardrobe combination selected from your active items."
+                                ),
+                            },
+                            selected,
+                            "deterministic-fallback",
+                            "wardrobe-core-set",
+                        )
+                    )
+
+            if len(accepted) != count:
+                details = "; ".join(dict.fromkeys(validation_errors[-5:]))
+                raise AIRecommendationError(
+                    f"Could not generate {count} valid diverse outfits after "
+                    f"{MAX_GENERATION_ATTEMPTS} attempts. Please retry. Validation: {details}"
+                )
 
         created: list[Outfit] = []
         try:

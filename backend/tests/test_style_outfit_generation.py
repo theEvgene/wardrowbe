@@ -95,6 +95,18 @@ class PromptAwareAI:
         )
 
 
+class InvalidLocalModel:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def generate_text(self, prompt: str, return_metadata: bool = False):
+        return SimpleNamespace(
+            content='{"outfits":[{"headline":"missing items"}]}',
+            model="gemma3:4b",
+            endpoint="local-test",
+        )
+
+
 def _weather_snapshot(temperature: float = 18.0) -> WeatherData:
     return WeatherData(
         temperature=temperature,
@@ -223,6 +235,38 @@ class TestStyleOutfitService:
         assert response.json()["outfits"][0]["target_style"] == "casual"
         assert response.json()["outfits"][0]["reasoning"] is None
         assert response.json()["outfits"][0]["style_notes"] is None
+
+    @pytest.mark.asyncio
+    async def test_invalid_local_model_falls_back_to_valid_core_sets(
+        self, client, auth_headers, db_session: AsyncSession, test_user, monkeypatch
+    ) -> None:
+        db_session.add_all(
+            [
+                ClothingItem(
+                    user_id=test_user.id,
+                    type=item_type,
+                    image_path=f"test/{uuid4()}.jpg",
+                    status=ItemStatus.ready,
+                    style=["casual"],
+                )
+                for item_type in ["shirt", "pants", "shoes"]
+            ]
+        )
+        await db_session.commit()
+        test_user.location_lat = 41.0082
+        test_user.location_lon = 28.9784
+        monkeypatch.setattr("app.services.style_outfit_service.AIService", InvalidLocalModel)
+
+        response = await client.post(
+            "/api/v1/outfits/generate-by-style",
+            json={"target_style": "casual", "count": 1, "occasion": "casual"},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200, response.json()
+        outfit = response.json()["outfits"][0]
+        assert len(outfit["items"]) == 3
+        assert {item["type"] for item in outfit["items"]} == {"shirt", "pants", "shoes"}
 
     @pytest.mark.asyncio
     async def test_public_endpoint_persists_and_returns_generation_context(
