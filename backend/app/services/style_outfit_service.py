@@ -451,7 +451,26 @@ class StyleOutfitService:
             # the hard validation boundary, but keep the user-facing flow
             # usable by falling back to those already validated combinations.
             if not accepted:
-                for index, core_set in enumerate(valid_core_sets[:count]):
+                fallback_sets: list[list[int]] = []
+                remaining_sets = [
+                    core_set
+                    for core_set in valid_core_sets
+                    if len(core_set) == len(set(core_set))
+                ]
+                used_numbers: set[int] = set()
+                while remaining_sets and len(fallback_sets) < count:
+                    selected_set = max(
+                        remaining_sets,
+                        key=lambda core_set: (
+                            len(set(core_set) - used_numbers),
+                            len(set(core_set)),
+                        ),
+                    )
+                    fallback_sets.append(selected_set)
+                    used_numbers.update(selected_set)
+                    remaining_sets.remove(selected_set)
+
+                for index, core_set in enumerate(fallback_sets):
                     selected = [number_map[number] for number in core_set]
                     accepted.append(
                         (
