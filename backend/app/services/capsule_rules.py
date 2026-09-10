@@ -125,6 +125,8 @@ def is_compatible(
 def select_capsule_sets(
     candidate_sets: list[list[int]],
     count: int,
+    *,
+    item_roles: dict[int, str] | None = None,
 ) -> list[list[int]]:
     """Select a diverse batch while preferring reuse of the same key pieces.
 
@@ -152,9 +154,34 @@ def select_capsule_sets(
         pairwise_difference = sum(
             len(set(left) ^ set(right)) for left, right in combinations(combo, 2)
         )
+        diversity_penalty = 0
+        if item_roles:
+            available_by_role: dict[str, set[int]] = {}
+            used_by_role: dict[str, set[int]] = {}
+            for item_set in normalized:
+                for item_number in item_set:
+                    role = item_roles.get(item_number)
+                    if role:
+                        available_by_role.setdefault(role, set()).add(item_number)
+            for item_set in combo:
+                for item_number in item_set:
+                    role = item_roles.get(item_number)
+                    if role:
+                        used_by_role.setdefault(role, set()).add(item_number)
+            for role, available in available_by_role.items():
+                minimum_unique = min(count, 2, len(available))
+                diversity_penalty += max(0, minimum_unique - len(used_by_role.get(role, set())))
         # Reuse dominates, but difference breaks ties and prevents identical
-        # looking batches when several compact choices are available.
-        objective = (float(unique_items), -float(pairwise_difference), tuple(combo))
+        # looking batches when several compact choices are available. When
+        # role metadata is available, first require meaningful top/bottom/
+        # footwear variation so compactness cannot collapse into one base
+        # outfit with only interchangeable shoes.
+        objective = (
+            float(diversity_penalty),
+            float(unique_items),
+            -float(pairwise_difference),
+            tuple(combo),
+        )
         if best is None or objective < best[0]:
             best = (objective, [list(item_set) for item_set in combo])
     return best[1] if best else []

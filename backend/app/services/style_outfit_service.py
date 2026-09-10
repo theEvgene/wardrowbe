@@ -77,6 +77,33 @@ class StyleOutfitService:
         return True
 
     @staticmethod
+    def _is_activity_suitable(item: ClothingItem, activity: str | None) -> bool:
+        """Keep context-specific footwear from leaking into mixed activities."""
+        activity_text = (activity or "").strip().lower()
+        if not activity_text:
+            return True
+        item_type = (item.type or "").lower()
+        subtype = (item.subtype or "").lower()
+        is_open_footwear = item_type in {"sandals"} or subtype in {
+            "sandals",
+            "flip-flops",
+            "slides",
+        }
+        dining_terms = (
+            "restaurant",
+            "ресторан",
+            "dinner",
+            "ужин",
+            "обед",
+            "кушать",
+            "покушать",
+            "есть",
+        )
+        if is_open_footwear and any(term in activity_text for term in dining_terms):
+            return False
+        return True
+
+    @staticmethod
     def _valid_core_number_sets(items: list[ClothingItem], limit: int = 200) -> list[list[int]]:
         by_role: dict[str, list[int]] = {}
         for number, item in enumerate(items, 1):
@@ -345,6 +372,7 @@ class StyleOutfitService:
             and (not allowed_ids or item.id in allowed_ids)
             and not (item_colors(item) & avoided_colors)
             and self._is_weather_suitable(item, weather_data)
+            and self._is_activity_suitable(item, context.get("activity"))
         ]
         if len(candidates) < 2:
             raise InsufficientWardrobeError(
@@ -384,7 +412,13 @@ class StyleOutfitService:
                 f"applying constraints; {count} requested"
             )
 
-        preferred_core_sets = select_capsule_sets(valid_core_sets, count)
+        item_roles = {
+            number: ITEM_ROLE.get((item.type or "").lower(), "")
+            for number, item in number_map.items()
+        }
+        preferred_core_sets = select_capsule_sets(
+            valid_core_sets, count, item_roles=item_roles
+        )
 
         recent_key_sets: set[frozenset[UUID]] = set()
         repeat_days = max(int(preference_snapshot["avoid_repeat_days"] or 0), 0)
@@ -414,12 +448,12 @@ class StyleOutfitService:
 
         ai_service = AIService(
             endpoints=preferences.ai_endpoints if preferences and preferences.ai_endpoints else None,
-            # Outfit generation has a validated local fallback. Do not make a
-            # stalled local model block the user for the global AI timeout or
-            # repeat transport failures inside both retry loops.
-            timeout=min(float(get_settings().ai_timeout), 30.0),
+            # Ollama may spend over a minute loading gemma3:4b on a cold CPU
+            # start. Give the configured local model one bounded opportunity
+            # to answer before using the validated deterministic fallback.
+            timeout=max(float(get_settings().ai_timeout), 120.0),
             max_retries=1,
-            total_timeout=30.0,
+            total_timeout=max(float(get_settings().ai_timeout), 120.0),
         )
         accepted: list[tuple[dict, list[ClothingItem], str, str]] = []
         accepted_key_sets: set[frozenset[UUID]] = set()
@@ -521,7 +555,9 @@ class StyleOutfitService:
                     for core_set in valid_core_sets
                     if len(core_set) == len(set(core_set))
                 ]
-                fallback_sets = select_capsule_sets(remaining_sets, count)
+                fallback_sets = select_capsule_sets(
+                    remaining_sets, count, item_roles=item_roles
+                )
 
                 for index, core_set in enumerate(fallback_sets):
                     selected = [number_map[number] for number in core_set]

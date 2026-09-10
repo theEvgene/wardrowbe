@@ -150,6 +150,11 @@ class TestStyleOutfitService:
         assert StyleOutfitService._is_weather_suitable(sneakers, {"temperature": 23}) is True
         assert StyleOutfitService._is_weather_suitable(flannel, {"temperature": 23}) is False
 
+    def test_warm_weather_excludes_boot_style_shoes_too(self) -> None:
+        boots = ClothingItem(type="shoes", subtype="boots", season=["fall", "winter"])
+
+        assert StyleOutfitService._is_weather_suitable(boots, {"temperature": 23}) is False
+
     def test_prompt_explicitly_applies_context_without_allowing_safety_override(self) -> None:
         item = ClothingItem(type="shirt", primary_color="blue", style=["casual"])
 
@@ -992,6 +997,79 @@ class TestAdversarialStyleGeneration:
             (outfit.ai_raw_response or {}).get("_ai_model") == "deterministic-fallback"
             for outfit in outfits
         )
+
+    @pytest.mark.asyncio
+    async def test_fallback_avoids_pool_sandals_when_activity_includes_dining(
+        self, db_session: AsyncSession, test_user, monkeypatch
+    ) -> None:
+        db_session.add_all(
+            [
+                ClothingItem(
+                    user_id=test_user.id,
+                    type="shirt",
+                    image_path=f"test/{uuid4()}.jpg",
+                    status=ItemStatus.ready,
+                    style=["casual"],
+                    formality="casual",
+                    season=["summer"],
+                ),
+                ClothingItem(
+                    user_id=test_user.id,
+                    type="pants",
+                    image_path=f"test/{uuid4()}.jpg",
+                    status=ItemStatus.ready,
+                    style=["casual"],
+                    formality="casual",
+                    season=["summer"],
+                ),
+                ClothingItem(
+                    user_id=test_user.id,
+                    type="sandals",
+                    subtype="flip-flops",
+                    image_path=f"test/{uuid4()}.jpg",
+                    status=ItemStatus.ready,
+                    style=["casual"],
+                    formality="very-casual",
+                    season=["summer"],
+                ),
+                ClothingItem(
+                    user_id=test_user.id,
+                    type="shoes",
+                    subtype="sneakers",
+                    image_path=f"test/{uuid4()}.jpg",
+                    status=ItemStatus.ready,
+                    style=["casual"],
+                    formality="casual",
+                    season=["all-season"],
+                ),
+            ]
+        )
+        await db_session.commit()
+        test_user.location_lat = 41.0082
+        test_user.location_lon = 28.9784
+
+        class UnavailableAI:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def generate_text(self, prompt: str, return_metadata: bool = False):
+                raise RuntimeError("local AI endpoint timed out")
+
+        monkeypatch.setattr("app.services.style_outfit_service.AIService", UnavailableAI)
+
+        outfits = await StyleOutfitService(db_session).generate(
+            user=test_user,
+            target_style="casual",
+            count=1,
+            occasion="casual",
+            generation_context={
+                "activity": "Поездка с ребёнком до бассейна и затем ресторан",
+            },
+            weather_data={"temperature": 23},
+        )
+
+        assert len(outfits) == 1
+        assert {row.item.subtype for row in outfits[0].items if row.item.type == "sandals"} == set()
 
     @pytest.mark.parametrize(
         "response_kind",
